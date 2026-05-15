@@ -25,8 +25,8 @@
   {
     "title": "The Spectral Maximal Update Parameterization in Theory and Practice",
     "description": "A practitioner's guide to spectral μP: heuristic derivations for SGD, Adam, AdamW, depth, and Muon, plus how the spectral perspective resolves subtle coordinate-check failures.",
-    "published": "December 2025",
-    "date": "December 2025",
+    "published": "December 1, 2025",
+    "date": "December 1, 2025",
     "icon": "🛩️",
     "authors": [
       {"author": "Kyle R. Chickering", "authorURL": "https://kyrochi.github.io/"}
@@ -40,9 +40,9 @@
   <h1>The Spectral Maximal Update Parameterization in Theory and Practice</h1>
   <p class="l-body">
     A heuristic guide to deriving and debugging $\mu$P using the spectral norm perspective.
-    Work completed while the author was affiliated with UC Davis
-    <a href="https://luka-group.github.io">LUKA Lab</a> and
-    MBZUAI <a href="https://ifm.ai">Institute of Foundation Models</a>.
+    Work completed while the author was affiliated with
+    <a href="https://luka-group.github.io">UC Davis LUKA Lab</a> and the
+    MBZUAI <a href="https://ifm.mbzuai.ac.ae/">Institute of Foundation Models</a>.
   </p>
 </d-title>
 
@@ -94,7 +94,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/mutransfer.png"
+    <img src="../../static/images/blog/spectral-mup/mutransfer.png"
          alt="Learning rate transfer across model scales under μP"
          style="width:100%;">
     <figcaption>Zero-shot hyperparameter transfer: a learning rate tuned at small width generalizes to large width under $\mu$P.</figcaption>
@@ -1045,14 +1045,14 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/voronoi.png"
+    <img src="../../static/images/blog/spectral-mup/voronoi.png"
          alt="Voronoi diagram showing learning rate and weight decay transferability"
          style="width:100%;">
     <figcaption>Voronoi diagram showing transferability of learning rate and weight decay across model and batch sizes at constant TPP.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/voronoi_tau.png"
+    <img src="../../static/images/blog/spectral-mup/voronoi_tau.png"
          alt="Voronoi diagram showing τ_ema transferability"
          style="width:100%;">
     <figcaption>$\tau_{\text{ema}}$ transferability across model and batch sizes at constant TPP.</figcaption>
@@ -1071,7 +1071,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/batch_size_response_with_optimal_lr_curve.png"
+    <img src="../../static/images/blog/spectral-mup/batch_size_response_with_optimal_lr_curve.png"
          alt="Loss as a function of learning rate and batch size"
          style="width:100%;">
     <figcaption>Relationship between loss, learning rate, and batch size in the constant-TPP (constant data) and constant-iterations (infinite data) regimes.</figcaption>
@@ -1099,7 +1099,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/passing_coord_check.png"
+    <img src="../../static/images/blog/spectral-mup/passing_coord_check.png"
          alt="A passing coordinate check on activations"
          style="width:100%;">
     <figcaption>A clean activation coordinate check: coordinates are stable across model sizes, confirming correct $\mu$P scaling.</figcaption>
@@ -1114,7 +1114,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/coord_check_weights.png"
+    <img src="../../static/images/blog/spectral-mup/coord_check_weights.png"
          alt="Spectral coordinate check on weight matrices"
          style="width:100%;">
     <figcaption>Spectral coordinate check on weight matrices. Weight updates (bottom row) become more stable across width as training progresses.</figcaption>
@@ -1160,7 +1160,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/failing_coord_check.png"
+    <img src="../../static/images/blog/spectral-mup/failing_coord_check.png"
          alt="A coordinate check that passes despite hidden layers not being updated"
          style="width:100%;">
     <figcaption>A GPT-2 style model with hidden layer learning rate set to zero. The standard coordinate check appears clean, falsely suggesting a correct $\mu$P implementation.</figcaption>
@@ -1184,14 +1184,14 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/Screen_Shot_2026-02-15_at_11.38.27_AM.png"
+    <img src="../../static/images/blog/spectral-mup/Screen_Shot_2026-02-15_at_11.38.27_AM.png"
          alt="Naïve GQA-μP passing standard coordinate check"
          style="width:100%;">
     <figcaption>Naïve GQA-$\mu$P passes the standard activation coordinate check — but this is a false positive.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/Screen_Shot_2026-02-15_at_11.38.42_AM.png"
+    <img src="../../static/images/blog/spectral-mup/Screen_Shot_2026-02-15_at_11.38.42_AM.png"
          alt="Naïve GQA-μP failing spectral coordinate check"
          style="width:100%;">
     <figcaption>The same naïve GQA-$\mu$P implementation fails the spectral coordinate check, correctly revealing the scaling deficiency.</figcaption>
@@ -1217,7 +1217,7 @@
   </p>
 
   <figure>
-    <img src="../../static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/failing_coord_check_adam.png"
+    <img src="../../static/images/blog/spectral-mup/failing_coord_check_adam.png"
          alt="Failing coordinate check caused by large Adam ε"
          style="width:100%;">
     <figcaption>A coordinate check failure caused by Adam $\varepsilon$ set too high. The non-power-law decay in weight updates signals a broken $\mu$P implementation.</figcaption>

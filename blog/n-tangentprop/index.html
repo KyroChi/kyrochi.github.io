@@ -276,7 +276,7 @@ $$\boldsymbol{\theta} \leftarrow \boldsymbol{\theta} - \eta \nabla_{\boldsymbol{
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0467.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0467.jpg"
          alt="Computational graph for σ" style="width:100%; max-width:500px; display:block; margin:0 auto;">
     <figcaption>
       The computational graph for evaluating $\sigma$. Given input $\psi_{ij}$, the black
@@ -307,9 +307,9 @@ u     &= \sum_{m}M_ms_m^2.
 \end{align*}$$
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0468.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0468.jpg"
          alt="Forward computation graph for the neural network" style="width:100%;">
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0469.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0469.jpg"
          alt="Computation graph with derivative operations" style="width:100%; margin-top:0.5rem;">
     <figcaption>
       Left: the forward computation graph for the two-layer network.
@@ -332,9 +332,9 @@ $$u'(x)=\left(\left(\left(\frac{\partial u}{\partial s_m^2}\odot\frac{\partial s
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0474.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0474.jpg"
          alt="Computational graph for the first derivative" style="width:100%;">
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0475.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0475.jpg"
          alt="First derivative graph with derivative operations" style="width:100%; margin-top:0.5rem;">
     <figcaption>
       Left: the computational graph for the first derivative $u'(x)$.
@@ -352,7 +352,7 @@ $$u'(x)=\left(\left(\left(\frac{\partial u}{\partial s_m^2}\odot\frac{\partial s
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0476.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0476.jpg"
          alt="Computational graph for the second derivative, with red repeated nodes"
          style="width:100%;">
     <figcaption>
@@ -396,7 +396,7 @@ $$\text{3rd: } \underbrace{2d}_{\text{original}}+\underbrace{4\cdot 2d}_{\text{r
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/graph_size.png"
+    <img src="../../static/images/blog/n-tangentprop/graph_size.png"
          alt="Exponential blowup of the autodiff computational graph" style="width:100%;">
     <figcaption>
       Empirical graph size as a function of derivative order for a depth-3 network.
@@ -491,7 +491,7 @@ $$\partial_{x^m}^n a^\ell_i = \sum_j w_{ij}^\ell(\xi^{(n)})_j^{\ell - 1}, \qquad
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0473.jpg"
+    <img src="../../static/images/blog/n-tangentprop/IMG_0473.jpg"
          alt="n-TangentProp computational graph for the second derivative" style="width:100%;">
     <figcaption>
       The $n$-TangentProp computational graph for the second derivative. Nothing is
@@ -535,7 +535,7 @@ $$\frac{e^{\sqrt{n}}}{n}M^n \quad\text{and}\quad e^{\sqrt{n}}M$$
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/desmos-graph_(2).png"
+    <img src="../../static/images/blog/n-tangentprop/desmos-graph_(2).png"
          alt="Runtime comparison between autodiff and n-TangentProp" style="width:100%;">
     <figcaption>
       Runtime comparison between autodiff ($e^{\sqrt{n}}M^n/n$) and $n$-TangentProp
@@ -553,31 +553,31 @@ $$\frac{e^{\sqrt{n}}}{n}M^n \quad\text{and}\quad e^{\sqrt{n}}M$$
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ttime.png"
+    <img src="../../static/images/blog/n-tangentprop/ttime.png"
          alt="Total time: n-TangentProp vs autodiff" style="width:100%;">
     <figcaption>Total time (forward + backward) comparison.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ftime.png"
+    <img src="../../static/images/blog/n-tangentprop/ftime.png"
          alt="Forward pass time: n-TangentProp vs autodiff" style="width:100%;">
     <figcaption>Forward pass time comparison.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/btime.png"
+    <img src="../../static/images/blog/n-tangentprop/btime.png"
          alt="Backward pass time: n-TangentProp vs autodiff" style="width:100%;">
     <figcaption>Backward pass time comparison.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ttime_grid_2.png"
+    <img src="../../static/images/blog/n-tangentprop/ttime_grid_2.png"
          alt="Total time grid across network sizes and derivative orders" style="width:100%;">
     <figcaption>Total time across a grid of network sizes and derivative orders.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ftime_grid_2.png"
+    <img src="../../static/images/blog/n-tangentprop/ftime_grid_2.png"
          alt="Forward pass time grid across network sizes and derivative orders"
          style="width:100%;">
     <figcaption>Forward pass time across a grid of network sizes and derivative orders.</figcaption>
@@ -610,19 +610,19 @@ $$-\lambda U + \bigl((1+\lambda)X+U\bigr)U' = 0.\tag{7}$$
   </p>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_2_(1).png"
+    <img src="../../static/images/blog/n-tangentprop/profile_2_(1).png"
          alt="Second self-similar Burgers profile" style="width:100%;">
     <figcaption>The second self-similar profile of Burgers equation.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_3_(1).png"
+    <img src="../../static/images/blog/n-tangentprop/profile_3_(1).png"
          alt="Third self-similar Burgers profile" style="width:100%;">
     <figcaption>The third self-similar profile of Burgers equation.</figcaption>
   </figure>
 
   <figure>
-    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_ratios.png"
+    <img src="../../static/images/blog/n-tangentprop/profile_ratios.png"
          alt="Runtime ratio: n-TangentProp vs autodiff for Burgers profiles"
          style="width:100%;">
     <figcaption>
