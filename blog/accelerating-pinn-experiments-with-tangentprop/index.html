@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath:  [['$', '$']],
+        displayMath: [['$$', '$$']],
+        tags: 'ams',
+      },
+      svg: { fontCache: 'global' },
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script src="https://distill.pub/template.v2.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    .back-link {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.85rem;
+      color: #666;
+      text-decoration: none;
+    }
+    .back-link:hover { color: #222; }
+    pre[class*="language-"] {
+      border-radius: 5px;
+      font-size: 0.8rem;
+      line-height: 1.55;
+      margin: 1.5rem 0;
+    }
+    .preamble {
+      font-style: italic;
+      border-left: 3px solid #ccc;
+      padding-left: 1rem;
+      color: #555;
+      margin: 1.5rem 0;
+    }
+    .warning-box {
+      background: #fff8e1;
+      border-left: 4px solid #f9a825;
+      padding: 0.75rem 1rem;
+      border-radius: 0 4px 4px 0;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .result-highlight {
+      background: #e8f5e9;
+      border-left: 4px solid #388e3c;
+      padding: 0.75rem 1rem;
+      border-radius: 0 4px 4px 0;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<d-front-matter>
+  <script id="distill-front-matter" type="text/json">{
+    "title": "Accelerating PINN Experiments with n-TangentProp",
+    "description": "Standard autodiff produces exponentially large computational graphs for high-order derivatives. n-TangentProp exploits the recursive structure of neural networks and Faà di Bruno's formula to compute nth-order derivatives in a single forward pass, yielding 24x–65x speedups for PINN training.",
+    "date": "January 2025",
+    "publishedDate": "2025-01-01",
+    "icon": "🛠️",
+    "authors": [
+      {
+        "author": "Kyle R. Chickering",
+        "authorURL": "https://kyrochi.github.io",
+        "affiliations": [{"name": "UC Davis", "url": "https://math.ucdavis.edu"}]
+      }
+    ]
+  }</script>
+</d-front-matter>
+
+<d-title>
+  <h1>Accelerating PINN Experiments with $n$-TangentProp</h1>
+</d-title>
+
+<d-byline></d-byline>
+
+<d-abstract>
+  <p>
+    Physics-Informed Neural Networks (PINNs) require repeated high-order spatial
+    differentiation during training. Standard autodiff produces exponentially large
+    computational graphs at each derivative order, making high-order PINN training
+    prohibitively expensive. We present $n$-TangentProp, which exploits the recursive
+    structure of neural networks and Faà di Bruno's formula to compute $n$-th order
+    derivatives in a single forward pass. For PINN experiments requiring three or more
+    derivatives, this yields dramatic speedups: over 24× for the third-order self-similar
+    Burgers profile and over 65× for the fourth-order profile.
+  </p>
+</d-abstract>
+
+<d-article>
+
+  <p><a class="back-link" href="../index.html">← Back to blog</a></p>
+
+  <p class="preamble">
+    This post accompanies <a href="https://arxiv.org/abs/2412.09752">this paper</a>,
+    <a href="https://math.ucdavis.edu/~krc/slide_decks/srrs_january_29_2025.pdf">these slides</a>,
+    and this <a href="https://github.com/kyrochi/n_tangentprop">GitHub repository</a>.
+    Citation quality here is informal — please see the paper for formal references.
+  </p>
+
+  <p>
+    In January of this year the world's most famous mathematician,
+    <a href="https://en.wikipedia.org/wiki/Terence_Tao">Terrence Tao</a>,
+    <a href="https://www.ams.org/journals/notices/202501/noti3041/noti3041.html?adat=January%202025&trk=3041&pdfissue=202501&pdffile=rnoti-p6.pdf&cat=none&type=.html">cited PINNs</a>
+    (<strong>P</strong>hysics <strong>I</strong>nformed <strong>N</strong>eural <strong>N</strong>etworks)
+    as a promising numerical method for assisting mathematicians in the search for a solution to the
+    <a href="https://en.wikipedia.org/wiki/Navier%E2%80%93Stokes_existence_and_smoothness">Navier-Stokes Millennium prize problem</a>.
+  </p>
+
+  <p>
+    The paper he cited was also the motivation for the work discussed here. The authors use PINNs
+    to find solutions to the Boussinesq equation in self-similar coordinates — an important step
+    toward understanding finite-time blowup in fluid equations, where the solutions are extremely
+    difficult to compute using standard numerical methods.
+  </p>
+
+  <p>
+    There are, in my view, three main impediments to mobilizing PINN techniques on a wider class
+    of problems:
+  </p>
+
+  <ol>
+    <li>Training PINNs is highly computationally inefficient.</li>
+    <li>There is no rigorous error analysis for PINNs in general.</li>
+    <li>PINN training is highly unstable in ways that are only beginning to be understood
+        (<a href="https://arxiv.org/abs/2310.05801">1</a>,
+         <a href="https://arxiv.org/abs/2402.01868">2</a>).</li>
+  </ol>
+
+  <p>
+    In this post we address the first point: the computational inefficiency of PINN training.
+    We propose an alternative to autodiff that computes neural network derivatives in linear
+    rather than exponential time. Since most PINN applications take at least three spatial
+    derivatives, this asymptotic improvement yields large practical speedups.
+  </p>
+
+  <h2>A Quick Primer on PINN Training</h2>
+
+  <h3>Deep Feed-Forward Neural Networks</h3>
+
+  <p>
+    One of the reasons we care about neural networks is that they are
+    <a href="https://en.wikipedia.org/wiki/Universal_approximation_theorem">universal function approximators</a>:
+    for any function and desired precision there exists a sufficiently large network that
+    approximates it within that tolerance. Finding these weights is always theoretically
+    possible but can be practically difficult.
+  </p>
+
+  <p>
+    We typically train neural networks using gradient descent, which requires a supervised
+    learning target. Given pairs $(x_i, y_i)$ and a network $u$, a typical loss is
+  </p>
+
+$$L(u)=\sum_{i}|y_i-u(x_i)|^2,$$
+
+  <p>
+    the mean-squared error. Gradient descent updates network parameters via
+  </p>
+
+$$\theta \leftarrow \theta -\eta\nabla_\theta L(u),$$
+
+  <p>
+    where $\eta$ controls the step size.
+  </p>
+
+  <h3>PINNs</h3>
+
+  <p>
+    <a href="https://en.wikipedia.org/wiki/Physics-informed_neural_networks">PINNs</a>
+    are neural networks trained to approximate the solution of an ODE or PDE. Because
+    neural networks with smooth activation functions are $C^\infty$ function approximators,
+    and $C^\infty$ functions are dense in the function spaces we care about
+    (e.g. $L^2$ and Sobolev spaces), we can use gradient descent to approximate solutions
+    of differential equations.
+  </p>
+
+  <p>
+    Let $u_\theta(\boldsymbol{x})$ be a feed-forward neural network with parameters $\theta$.
+    Our goal is to find $\theta$ such that $u_\theta$ is a good $C^\infty$ approximation
+    to the solution $u$ of $F(\partial^\alpha u;\,\boldsymbol{x})=0$. We train over a
+    discrete domain $\Omega=\{\,\boldsymbol{x}_1, \boldsymbol{x}_2, \cdots, \boldsymbol{x}_N\,\}$
+    using the PINN loss
+  </p>
+
+$$L(u_\theta) = \frac{1}{N}\sum_{k=1}^N|F(\partial^\alpha u_\theta;\,\boldsymbol{x}_k)|^2+\text{BC},\tag{1}$$
+
+  <p>
+    the mean-squared error of the differential equation residual $F$, plus a boundary
+    condition term BC. Since $u_\theta$ is $C^\infty$ with a known derivative structure,
+    we can exactly compute all derivatives $\partial^\alpha u_\theta$ appearing in the
+    loss.
+  </p>
+
+  <p>
+    Training is further complicated by the need to enforce boundary conditions, which
+    introduces problems typical of multi-target optimization. One more practically important
+    aspect: training a PINN on the first-order loss (1) alone yields slow convergence.
+    Empirically, convergence is greatly improved by the higher-order
+    <a href="https://proceedings.neurips.cc/paper/2017/hash/758a06618c69880a6cee5314ee42d52f-Abstract.html">Sobolev loss</a>
+  </p>
+
+$$L^{(m)}_{\text{Sobolev}}(u_\theta) = \frac{1}{N}\sum_{k=1}^N\sum_{j=0}^m Q_j\left|\nabla_{\boldsymbol{x}}^j F(\partial^\alpha u;\,\boldsymbol{x}_k)\right|^2 + \text{BC}, \tag{2}$$
+
+  <p>
+    where the $Q_j$ are relative weights treated as hyperparameters. The key point for our
+    present discussion: the Sobolev loss requires <strong>taking additional spatial
+    derivatives during training</strong>.
+  </p>
+
+  <h3>PINNs: The Good and the Bad</h3>
+
+  <p>
+    PINNs occupy a somewhat strange place in numerics. On one hand they can solve seemingly
+    intractable problems. On the other, they are slow to train, prone to poor convergence,
+    and lack rigorous error analysis. For problems where traditional numerics work well,
+    PINNs are generally not worth the trouble.
+  </p>
+
+  <p>
+    However, a use case for which PINNs are particularly well-suited is finding self-similar
+    blowup profiles in fluid mechanics. Shock formation can be understood as arising from
+    competing scalings between spatial and temporal features, and by transforming into
+    self-similar coordinates one can convert the PDE into a much simpler ODE.
+  </p>
+
+  <p>
+    As an example, the self-similar Burgers equation in update form reads
+  </p>
+
+$$W'(X)=-\frac{\gamma W(X)}{(1+\gamma)X+W(X)},$$
+
+  <p>
+    which is naïvely singular at the origin. More importantly, we must solve for
+    $W$ <strong>and</strong> $\gamma$ simultaneously: the constraint that determines
+    $\gamma$ is a smoothness condition on $W$, which is satisfied only for a countably
+    infinite sequence of values. PINNs allow us to hold an explicit $C^\infty$ form for
+    the approximation and solve for both $W$ and $\gamma$ simultaneously via gradient
+    descent on (1) or the Sobolev target (2).
+  </p>
+
+  <p>
+    In summary: PINNs are a <strong>niche</strong> numerical method, impractical for many
+    problems but well-suited to a small number — including self-similar blowup profiles.
+  </p>
+
+  <h2>Autodiff and $n$-TangentProp</h2>
+
+  <h3>Autodiff</h3>
+
+  <p>
+    The modern deep learning revolution would arguably have been impossible without the
+    <a href="https://en.wikipedia.org/wiki/Automatic_differentiation">autodifferentiation (autodiff) algorithm</a>.
+    Given a neural network $f(\boldsymbol{x};\boldsymbol{\theta})$ expressible as a directed
+    acyclic graph (DAG), autodiff computes $\nabla_{\boldsymbol{x},\boldsymbol{\theta}}f$
+    by running a forward pass, storing activations, then running a backward pass accumulating
+    gradients. Since the optimization step looks like
+  </p>
+
+$$\boldsymbol{\theta} \leftarrow \boldsymbol{\theta} - \eta \nabla_{\boldsymbol{\theta}}L(f),$$
+
+  <p>
+    the efficiency of autodiff directly fueled the deep learning revolution of the 2010s.
+  </p>
+
+  <p>
+    Autodiff works by representing every operation as a node in a DAG, where each node
+    carries both a forward operation and a derivative operation:
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0467.jpg"
+         alt="Computational graph for σ" style="width:100%; max-width:500px; display:block; margin:0 auto;">
+    <figcaption>
+      The computational graph for evaluating $\sigma$. Given input $\psi_{ij}$, the black
+      arrows represent the forward computation; the orange arrows trace the derivative
+      operation $\sigma'(\psi_{ij})\odot D_{ij}$ backwards through the same graph.
+    </figcaption>
+  </figure>
+
+  <p>
+    For the purposes of illustration we use a simple two-layer neural network with output
+    projection. Let $x\in \mathbb{R}$, $W^1 \in \mathcal{M}_{d\times 1}$,
+    $W^2 \in \mathcal{M}_{d\times d}$, $M\in \mathcal{M}_{1\times d}$, and $\sigma$ an
+    activation function. The network is
+  </p>
+
+$$u(x)=M\cdot(\sigma(W^2\cdot\sigma(W^1\cdot x))),\tag{*}$$
+
+  <p>
+    or equivalently via the recursive formulas
+  </p>
+
+$$\begin{align*}
+a^1_j &= W^1_jx, \\
+s_j^1 &= \sigma(a_j^1), \\
+a_m^2 &= \sum_{j}W^2_{mj}s_j^1, \\
+s_m^2 &= \sigma(a_m^2), \\
+u     &= \sum_{m}M_ms_m^2.
+\end{align*}$$
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0468.jpg"
+         alt="Forward computation graph for the neural network" style="width:100%;">
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0469.jpg"
+         alt="Computation graph with derivative operations" style="width:100%; margin-top:0.5rem;">
+    <figcaption>
+      Left: the forward computation graph for the two-layer network.
+      Right: the same graph with corresponding differentiation operations at each node.
+    </figcaption>
+  </figure>
+
+  <p>
+    Autodiff builds a <strong>new computational graph</strong> for $u'(x)$ by tracing the
+    derivative through the right-hand graph above. By the chain rule applied to $(*)$:
+  </p>
+
+$$u'(x)=\left(\left(\left(\frac{\partial u}{\partial s_m^2}\odot\frac{\partial s_m^2}{\partial a_m^2}\right)\cdot \frac{\partial a_m^2}{\partial s_j^1}\right)\odot \frac{\partial s_j^1}{\partial a_j^1}\right)\cdot \frac{\partial a_j^1}{\partial x},$$
+
+  <p>
+    where $\odot$ is the Hadamard (element-wise) product and $\cdot$ is the standard
+    dot-product. Following the orange arrows through the graph generates a new computational
+    graph for the derivative. When we draw this graph the functional composition introduces
+    new dependencies that prevent it from being a simple chain:
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0474.jpg"
+         alt="Computational graph for the first derivative" style="width:100%;">
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0475.jpg"
+         alt="First derivative graph with derivative operations" style="width:100%; margin-top:0.5rem;">
+    <figcaption>
+      Left: the computational graph for the first derivative $u'(x)$.
+      Right: the same graph with derivative operations. The edges shown in blue are
+      <strong>recomputed</strong> when we form the second-derivative graph, even though they
+      were already computed during the zeroth-order forward pass.
+    </figcaption>
+  </figure>
+
+  <p>
+    When we build the computational graph for the <strong>second derivative</strong>, the
+    nodes computed for the first derivative are re-evaluated. The computer does not know it
+    already computed these values. We draw the re-computed values in <strong>red</strong>
+    below.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0476.jpg"
+         alt="Computational graph for the second derivative, with red repeated nodes"
+         style="width:100%;">
+    <figcaption>
+      The computational graph for the second derivative $u''(x)$. Nodes shown in
+      <strong>red</strong> are recomputed, even though their values were already available
+      from the first-derivative forward pass.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>Exponential growth of the computational graph.</strong>
+    For a depth-$d$ network, counting nodes at each derivative order gives:
+  </p>
+
+$$\text{1st: } \underbrace{2d}_{\text{original}}+\underbrace{2(d+1)}_{\text{new}} = 4d+2$$
+
+$$\text{2nd: } \underbrace{2d}_{\text{original}}+\underbrace{2\cdot 2d}_{\text{repeated 1st}}+\underbrace{2(d+1)}_{\text{new}} = 8d+2$$
+
+$$\text{3rd: } \underbrace{2d}_{\text{original}}+\underbrace{4\cdot 2d}_{\text{repeated 1st}}+\underbrace{2\cdot 2d}_{\text{repeated 2nd}}+\underbrace{2(d+1)}_{\text{new}} = 16d+2$$
+
+  <p>
+    That is, $\#\text{ nodes} = 2^{n+1}d+2$, so the computational graph grows like
+    $\mathcal{O}(2^{n+1})$ in the number of derivatives $n$.
+  </p>
+
+  <div class="warning-box">
+    <strong>Warning I:</strong> The actual graph computed by an autograd library is much
+    larger, but this only changes the pre-factor. A better asymptotic bound is
+    $\mathcal{O}(\sqrt{e}^{\,n+1})$, reflecting that the graph does not fully double at
+    each step.
+  </div>
+
+  <div class="warning-box">
+    <strong>Warning II:</strong> The runtime to <em>evaluate</em> the graph grows even
+    faster, because the number of nodes does not scale linearly with FLOPs.
+  </div>
+
+  <p>
+    We can verify this empirically by plotting graph size as a function of derivative order
+    for a simple depth-3 network:
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/graph_size.png"
+         alt="Exponential blowup of the autodiff computational graph" style="width:100%;">
+    <figcaption>
+      Empirical graph size as a function of derivative order for a depth-3 network.
+      The exponential blowup is clearly visible.
+    </figcaption>
+  </figure>
+
+  <p>
+    <strong>Summary:</strong> Functional evaluation introduces extra dependencies in the
+    derivative graph, forcing recomputation. This leads to exponential blowup in both
+    memory and runtime when using autodiff to take high-order derivatives.
+  </p>
+
+  <h3>The TangentProp Formalism</h3>
+
+  <p>
+    Neural networks precede autodiff by nearly 30 years, and there were almost three decades
+    of impressive neural network research prior to its widespread adoption. There are
+    alternative methods for computing derivatives — methods that avoid the repeated
+    computation by working directly with the recursive structure of the network.
+  </p>
+
+  <p>
+    We base our work on the TangentProp formalism introduced by
+    <a href="https://proceedings.neurips.cc/paper/1991/hash/65658fde58ab3c2b6e5132a39fae7cb9-Abstract.html">Simard et al. in 1991</a>,
+    written before autodiff's widespread adoption. They propose computing both $f$ and
+    $\nabla_{\boldsymbol{x}} f$ in a single forward pass by exploiting the explicit
+    recursive structure of the network. The activation at layer $\ell$ is
+  </p>
+
+$$a^\ell_i = \sum_{j}w_{ij}\sigma(a^{\ell - 1}_j),\tag{3}$$
+
+  <p>
+    and differentiating with respect to the network inputs gives
+  </p>
+
+$$\partial_{x_m}a_i^\ell = \sum_j w_{ij}\sigma'(a_j^{\ell-1})\,\partial_{x_m}a_{j}^{\ell - 1}. \tag{4}$$
+
+  <p>
+    The key observation: the activation at layer $\ell$ and its derivative depend only on
+    the activation (and its derivative) from the <strong>previous</strong> layer. Thus we
+    can compute physical derivatives in a single forward pass, without building a new graph.
+  </p>
+
+  <h3>Our Approach: $n$-TangentProp</h3>
+
+  <p>
+    TangentProp computes a single derivative because that was sufficient for its original
+    use case. But the principle — that physical derivatives can be computed recursively in
+    one forward pass — extends to any number of derivatives. We propose $n$-TangentProp,
+    which computes $\nabla_{\boldsymbol{x}}^n f$ in a single forward pass, achieving runtime
+    $\mathcal{O}(nM)$ vs. autodiff's $\mathcal{O}(2^nM)$.
+  </p>
+
+  <p>
+    Most readers know
+    <a href="https://en.wikipedia.org/wiki/General_Leibniz_rule">Leibniz's formula</a>
+    for higher-order derivatives of products:
+  </p>
+
+$$\frac{d^n}{dx^n}(fg) = \sum_{j=0}^n C_{j,n}f^{(j)}g^{(n-j)}.$$
+
+  <p>
+    The lesser-known generalization of the chain rule is
+    <a href="https://en.wikipedia.org/wiki/Fa%C3%A0_di_Bruno%27s_formula">Faà di Bruno's formula</a>:
+  </p>
+
+$$\frac{d^n}{dx^n}(f\circ g) = \sum_{\boldsymbol{p}\in \mathcal{P}(n)}C_{\boldsymbol{p}}\,(f^{(|\boldsymbol{p}|)}\circ g)\prod_{j=1}^{n}(g^{(j)})^{p_j},$$
+
+  <p>
+    where the sum is over the set $\mathcal{P}(n)$ of partitions of $n$, with
+    $\boldsymbol{p}$ an $n$-tuple satisfying $\sum_k k p_k = n$,
+    $|\boldsymbol{p}| = \sum_k p_k$, and $C_{\boldsymbol{p}}$ a readily computable
+    combinatorial constant.
+  </p>
+
+  <p>
+    Applying Faà di Bruno's formula to (3) gives the $n$-TangentProp update rule:
+  </p>
+
+$$\partial_{x^m}^n a^\ell_i = \sum_j w_{ij}^\ell(\xi^{(n)})_j^{\ell - 1}, \qquad (\xi^{(n)})^{\ell}_j = \sum_{\boldsymbol{p}}C_{\boldsymbol{p}}\,\sigma^{(|\boldsymbol{p}|)}(a_j^{\ell-1})\prod_{k=1}^m\left((\xi^{(k)})_j^{\ell-1}\right)^{p_k}.$$
+
+  <p>
+    Once implemented, this computes $n$ derivatives in (quasi)linear time. The implementation
+    is not particularly difficult and makes for a good ML programming exercise. Our complete
+    code is on <a href="https://github.com/kyrochi/n_tangentprop">GitHub</a>.
+  </p>
+
+  <p>
+    Below is the computational graph for the second derivative computed via $n$-TangentProp.
+    Compare this with the autodiff graph above:
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/IMG_0473.jpg"
+         alt="n-TangentProp computational graph for the second derivative" style="width:100%;">
+    <figcaption>
+      The $n$-TangentProp computational graph for the second derivative. Nothing is
+      recomputed. The upper portion (shown in <strong>red</strong>) can be pruned since
+      its inputs are always zero; columns in the lower portion (in <strong>blue</strong>)
+      corresponding to unnecessary derivatives can similarly be pruned.
+    </figcaption>
+  </figure>
+
+  <h3>A Note on Precise Asymptotic Runtimes</h3>
+
+  <p>
+    Our algorithm is not quite linear and autodiff is not quite exponential.
+    $n$-TangentProp is slightly super-linear, and autodiff is slightly super-exponential.
+    The reason is the sum over integer partitions in Faà di Bruno's formula. The number of
+    such partitions is the partition function $p(n)$:
+  </p>
+
+$$p(n):=\text{\# of integer partitions of } n.$$
+
+  <p>
+    The classical
+    <a href="https://en.wikipedia.org/wiki/Partition_function_(number_theory)#Approximation_formulas">Hardy-Ramanujan result</a>
+    gives the tight asymptotic bound
+  </p>
+
+$$p(n)=\mathcal{O}\!\left(\frac{e^{\pi\sqrt{2n/3}}}{n}\right) \approx \mathcal{O}\!\left(\frac{e^{\sqrt{n}}}{n}\right).$$
+
+  <p>
+    This root-exponential dependence cannot be avoided by <strong>any</strong>
+    differentiation algorithm — it is an unavoidable consequence of differentiating
+    through function composition, which necessarily requires Faà di Bruno's formula.
+    The more precise runtimes for autodiff and $n$-TangentProp are
+  </p>
+
+$$\frac{e^{\sqrt{n}}}{n}M^n \quad\text{and}\quad e^{\sqrt{n}}M$$
+
+  <p>
+    respectively. For large $n$ the advantage of $n$-TangentProp is clear: autodiff
+    is super-exponential while $n$-TangentProp is sub-exponential.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/desmos-graph_(2).png"
+         alt="Runtime comparison between autodiff and n-TangentProp" style="width:100%;">
+    <figcaption>
+      Runtime comparison between autodiff ($e^{\sqrt{n}}M^n/n$) and $n$-TangentProp
+      ($e^{\sqrt{n}}M$) as a function of derivative order $n$.
+    </figcaption>
+  </figure>
+
+  <h2>Results</h2>
+
+  <h3>Results for General Neural Networks</h3>
+
+  <p>
+    The following plots show speed comparisons for forward and backward passes through a
+    network (not training yet) as a function of derivative order and network size.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ttime.png"
+         alt="Total time: n-TangentProp vs autodiff" style="width:100%;">
+    <figcaption>Total time (forward + backward) comparison.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ftime.png"
+         alt="Forward pass time: n-TangentProp vs autodiff" style="width:100%;">
+    <figcaption>Forward pass time comparison.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/btime.png"
+         alt="Backward pass time: n-TangentProp vs autodiff" style="width:100%;">
+    <figcaption>Backward pass time comparison.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ttime_grid_2.png"
+         alt="Total time grid across network sizes and derivative orders" style="width:100%;">
+    <figcaption>Total time across a grid of network sizes and derivative orders.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/ftime_grid_2.png"
+         alt="Forward pass time grid across network sizes and derivative orders"
+         style="width:100%;">
+    <figcaption>Forward pass time across a grid of network sizes and derivative orders.</figcaption>
+  </figure>
+
+  <h3>Results for a Model Problem</h3>
+
+  <p>
+    To illustrate the method in a real-world application we find smooth self-similar
+    solutions to <a href="https://en.wikipedia.org/wiki/Burgers%27_equation">Burgers equation</a>,
+    the canonical model for 1D shock formation:
+  </p>
+
+$$\partial_t u + u\,\partial_x u = 0. \tag{6}$$
+
+  <p>
+    Converting to self-similar coordinates via
+    $u(x,t)=(1-t)^\lambda U(X)$, $X=x/(1-t)^{1+\lambda}$, the PDE becomes the ODE
+  </p>
+
+$$-\lambda U + \bigl((1+\lambda)X+U\bigr)U' = 0.\tag{7}$$
+
+  <p>
+    This problem admits an implicit exact solution $X = -U - CU^{1+1/\lambda}$, but the
+    techniques developed here generalize to much more challenging problems where no closed
+    form exists. We deploy a PINN to solve (7), finding both $U$ and $\lambda$
+    simultaneously via gradient descent. Since PINNs are automatically $C^\infty$,
+    enforcing smoothness constraints at the origin — which determine $\lambda$ — is
+    straightforward.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_2_(1).png"
+         alt="Second self-similar Burgers profile" style="width:100%;">
+    <figcaption>The second self-similar profile of Burgers equation.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_3_(1).png"
+         alt="Third self-similar Burgers profile" style="width:100%;">
+    <figcaption>The third self-similar profile of Burgers equation.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="../../static/images/blog/accelerating-pinn-experiments-with-tangentprop/profile_ratios.png"
+         alt="Runtime ratio: n-TangentProp vs autodiff for Burgers profiles"
+         style="width:100%;">
+    <figcaption>
+      Runtime ratio of $n$-TangentProp to autodiff for computing self-similar Burgers
+      profiles. The L-BFGS optimizer amplifies the benefit of $n$-TangentProp because it
+      runs many forward passes per backward pass, and forward-pass gains are larger.
+    </figcaption>
+  </figure>
+
+  <div class="result-highlight">
+    <p>
+      We only computed the first two profiles using autodiff. Already for the third profile,
+      autodiff required more than 24 hours on an A6000 GPU. With $n$-TangentProp this took
+      under 1 hour: <strong>over 24× speedup</strong>. For the fourth profile we estimate
+      autodiff would take ~100 hours; $n$-TangentProp computed it in under 90 minutes:
+      <strong>over 65× speedup</strong>.
+    </p>
+  </div>
+
+  <h2>Conclusions</h2>
+
+  <p>
+    For any PINN use case requiring three or more derivatives, we recommend implementing
+    $n$-TangentProp to avoid needlessly wasting compute.
+  </p>
+
+  <p>Consequences of this work include:</p>
+
+  <ol>
+    <li>
+      <strong>Democratization</strong> of PINN research — researchers without access to
+      high-compute clusters can now study PINN problems requiring high-order derivatives.
+    </li>
+    <li>
+      <strong>New avenues of study</strong> requiring high-order derivatives of PINNs.
+      In particular, we can easily enforce smoothness and compute previously unknown
+      unstable self-similar solutions.
+    </li>
+    <li>
+      <strong>More accurate solutions</strong> with less compute. Faster high-order
+      derivative computation enables higher Sobolev losses, leading to more accurate
+      PINN solvers.
+    </li>
+  </ol>
+
+  <h3>Future Directions</h3>
+
+  <p>
+    Several promising extensions remain open. If anyone is interested in these as projects,
+    please reach out.
+  </p>
+
+  <ul>
+    <li>
+      <strong>Optimizations:</strong> We did not optimize our code. Low-hanging optimizations
+      include graph-level pruning, a C++ forward procedure, PyTorch JIT compilation, and
+      low-level register and math-operation optimizations.
+    </li>
+    <li>
+      <strong>Multiprop:</strong> We restricted ourselves to scalar derivatives, but the
+      approach extends further. For example, the diagonal of the Hessian with respect to
+      weights can be computed in linear time, with applications wherever a sparse subset of
+      a high-order derivative tensor is needed (e.g. the Laplacian on $\mathbb{R}^d$).
+    </li>
+  </ul>
+
+</d-article>
+
+<d-appendix>
+  <d-footnote-list></d-footnote-list>
+</d-appendix>
+
+</body>
+</html>

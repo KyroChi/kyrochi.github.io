@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://distill.pub/template.v2.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <style>
+    .back-link {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.85rem;
+      color: #666;
+      text-decoration: none;
+    }
+    .back-link:hover { color: #222; }
+
+    pre[class*="language-"] {
+      border-radius: 5px;
+      font-size: 0.8rem;
+      line-height: 1.55;
+      margin: 1.5rem 0;
+    }
+
+    .widget-box {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1.5rem 1.75rem;
+      margin: 1.5rem 0;
+    }
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .widget-grid label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #555;
+      margin-bottom: 0.4rem;
+    }
+    .widget-grid input[type=range] { width: 100%; }
+    .widget-grid select {
+      width: 100%;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.9rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .widget-val { font-size: 0.85rem; color: #444; margin-top: 0.2rem; }
+    .widget-result {
+      background: #fff;
+      border-left: 4px solid #2b6cb0;
+      padding: 0.75rem 1rem;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+    .big-num {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2b6cb0;
+      display: block;
+      margin-top: 0.15rem;
+    }
+    .timing-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .timing-table th, .timing-table td {
+      border: 1px solid #ddd;
+      padding: 0.4rem 0.75rem;
+      text-align: right;
+    }
+    .timing-table th { background: #f5f5f5; text-align: center; }
+    .timing-table td:first-child { text-align: right; font-family: monospace; }
+    .crossover-row { background: #fff8e1; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<d-front-matter>
+  <script id="distill-front-matter" type="text/json">{
+    "title": "Should You Multithread? An Experiment-Driven Approach",
+    "description": "Spawning threads has overhead. We implement matrix multiplication in C, measure pthread creation cost, derive a closed-form break-even condition, and build a smart multiplier that chooses the faster path automatically.",
+    "date": "November 7, 2022",
+    "publishedDate": "2022-11-07",
+    "icon": "🧶",
+    "authors": [
+      {
+        "author": "Kyle R. Chickering",
+        "authorURL": "https://kyrochi.github.io",
+        "affiliations": [{"name": "UC Davis"}]
+      }
+    ],
+    "katex": {}
+  }</script>
+</d-front-matter>
+
+<d-title>
+  <h1>Should You Multithread?</h1>
+  <p>An Experiment-Driven Approach</p>
+</d-title>
+
+<d-byline></d-byline>
+
+<d-abstract>
+  <p>
+    Multi-threading is not automatically faster. Creating and joining threads has measurable
+    overhead on the order of 100 µs per thread on typical hardware — enough to swamp a short
+    computation entirely. Using matrix multiplication as a test case, we measure this overhead
+    directly with <code>pthreads</code>, derive a closed-form crossover condition, and build
+    a "smart" multiplier that automatically selects the faster path. An interactive calculator
+    lets you find your own machine's crossover point.
+  </p>
+</d-abstract>
+
+<d-article>
+
+  <p><a class="back-link" href="../index.html">← Back to blog</a></p>
+
+  <h2>The Assumption</h2>
+
+  <p>
+    When you hear "multithreading," you probably think "faster." The logic seems airtight:
+    more CPU cores running in parallel should finish sooner. But there is a hidden cost —
+    the operating system has to create a thread, schedule it, and then join it back. For
+    short tasks, this overhead dominates and the parallel version ends up slower than the
+    serial one.
+  </p>
+  <p>
+    This article answers the question quantitatively. We will implement matrix multiplication
+    in C, naively parallelize it, watch the performance collapse, measure the overhead,
+    derive the exact break-even condition, and build something smarter.
+  </p>
+  <p>
+    <strong>Prerequisites:</strong> C programming, basic linear algebra, a POSIX system
+    with <code>pthreads</code>, and a C compiler.
+  </p>
+
+  <h2>Implementing Matrix Multiplication</h2>
+
+  <p>
+    We represent a matrix as a struct with row/column counts and a flat <code>double*</code>
+    array stored in row-major order. Using a 1-D array instead of <code>double**</code> needs
+    only a single allocation and keeps the indexing arithmetic simple.
+    <d-footnote>
+      A <code>double**</code> requires N+1 separate <code>malloc</code> calls — one
+      for the pointer array and one per row — and produces fragmented memory. A flat
+      <code>double*</code> does it in one call. Row-major indexing is just
+      <code>i * n_cols + j</code>.
+    </d-footnote>
+  </p>
+
+<pre><code class="language-c">typedef struct {
+    int     n_rows;
+    int     n_cols;
+    double *data;
+} Matrix;
+
+Matrix *mat_create(int n_rows, int n_cols) {
+    Matrix *m  = malloc(sizeof(Matrix));
+    m->n_rows  = n_rows;
+    m->n_cols  = n_cols;
+    m->data    = malloc(n_rows * n_cols * sizeof(double));
+    return m;
+}
+
+void mat_destroy(Matrix *m) {
+    free(m->data);
+    free(m);
+}
+
+double mat_get(Matrix *m, int i, int j) { return m->data[i * m->n_cols + j]; }
+void   mat_set(Matrix *m, int i, int j, double v) { m->data[i * m->n_cols + j] = v; }</code></pre>
+
+  <p>
+    Matrix multiplication <d-math>C = AB</d-math> requires computing
+    <d-math>c_{ij} = \sum_{k=1}^{K} a_{ik}\, b_{kj}</d-math>
+    for each entry, where <d-math>K</d-math> is the shared (inner) dimension.
+    This is <d-math>O(K)</d-math> per entry and <d-math>O(MNK)</d-math> overall for
+    an <d-math>M \times K</d-math> times <d-math>K \times N</d-math> product.
+  </p>
+  <p>
+    We factor out the inner dot product into its own function. That decision will pay off
+    when we parallelize:
+  </p>
+
+<pre><code class="language-c">/* Compute C[i][j] = dot( A[i,:], B[:,j] ) */
+double matmul_subroutine(Matrix *A, Matrix *B, int i, int j) {
+    double sum = 0.0;
+    for (int k = 0; k &lt; A->n_cols; k++)
+        sum += mat_get(A, i, k) * mat_get(B, k, j);
+    return sum;
+}
+
+Matrix *matmul(Matrix *A, Matrix *B) {
+    Matrix *C = mat_create(A->n_rows, B->n_cols);
+    for (int i = 0; i &lt; A->n_rows; i++)
+        for (int j = 0; j &lt; B->n_cols; j++)
+            mat_set(C, i, j, matmul_subroutine(A, B, i, j));
+    return C;
+}</code></pre>
+
+  <h2>Naïve Multithreading: One Thread per Dot Product</h2>
+
+  <p>
+    The parallel structure is obvious: every one of the <d-math>S = M \times N</d-math>
+    dot products is independent. Spawn one thread per entry, join them all at the end.
+  </p>
+
+<pre><code class="language-c">#include &lt;pthread.h&gt;
+
+typedef struct { Matrix *A, *B, *C; int i, j; } ThreadParams;
+
+void *thread_fn(void *args) {
+    ThreadParams *p = (ThreadParams *)args;
+    mat_set(p->C, p->i, p->j, matmul_subroutine(p->A, p->B, p->i, p->j));
+    return NULL;
+}
+
+Matrix *matmul_parallel_naive(Matrix *A, Matrix *B) {
+    int S = A->n_rows * B->n_cols;
+    Matrix    *C      = mat_create(A->n_rows, B->n_cols);
+    pthread_t  threads[S];
+    ThreadParams params[S];
+
+    int t = 0;
+    for (int i = 0; i &lt; A->n_rows; i++)
+        for (int j = 0; j &lt; B->n_cols; j++) {
+            params[t] = (ThreadParams){A, B, C, i, j};
+            pthread_create(&amp;threads[t], NULL, thread_fn, &amp;params[t]);
+            t++;
+        }
+    for (int i = 0; i &lt; S; i++)
+        pthread_join(threads[i], NULL);
+    return C;
+}</code></pre>
+
+  <p>Benchmark on a 100 × 100 matrix product (10,000 dot products):</p>
+
+  <table>
+    <thead>
+      <tr><th>Implementation</th><th>Time (s)</th><th>Relative</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>matmul</code> (serial)</td>
+        <td>0.000172</td>
+        <td>1×</td>
+      </tr>
+      <tr>
+        <td><code>matmul_parallel_naive</code></td>
+        <td>0.003134</td>
+        <td><strong>18× slower</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    The parallel version is eighteen times slower. The threads are not helping — they are
+    <em>costing</em> us. The computation is so short that the overhead of spawning and joining
+    10,000 threads dwarfs the actual work.
+  </p>
+
+  <h2>Measuring Thread Overhead</h2>
+
+  <p>
+    To confirm the hypothesis, we measure the cost of a <code>pthread_create</code> +
+    <code>pthread_join</code> pair directly, using <code>clock_gettime</code> for
+    wall-clock time.
+    <d-footnote>
+      <code>clock()</code> measures CPU time, which accumulates across all threads and
+      would give a misleadingly large number in a multi-threaded context.
+      <code>clock_gettime(CLOCK_MONOTONIC, ...)</code> gives wall-clock elapsed time,
+      which is what the user actually waits for.
+    </d-footnote>
+  </p>
+
+<pre><code class="language-c">#include &lt;time.h&gt;
+
+void *noop(void *arg) { return NULL; }
+
+double measure_thread_overhead(void) {
+    struct timespec t0, t1;
+    const int N = 1000;
+    pthread_t thread;
+
+    clock_gettime(CLOCK_MONOTONIC, &amp;t0);
+    for (int i = 0; i &lt; N; i++) {
+        pthread_create(&amp;thread, NULL, noop, NULL);
+        pthread_join(thread, NULL);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &amp;t1);
+
+    double elapsed = (t1.tv_sec  - t0.tv_sec) +
+                     (t1.tv_nsec - t0.tv_nsec) * 1e-9;
+    return elapsed / N;   /* amortized cost per create+join */
+}</code></pre>
+
+  <p>
+    On the test machine this yields <strong><d-math>h \approx 0.0001</d-math> seconds
+    (100 µs) per thread</strong>. For a 100 × 100 product that spawns 10,000 threads,
+    the overhead alone is roughly one second — far more than the 172 µs serial time.
+  </p>
+
+  <h2>The Break-Even Condition</h2>
+
+  <p>Let's be precise. Define:</p>
+  <ul>
+    <li><d-math>S = M \times N</d-math> — total number of dot products</li>
+    <li><d-math>T</d-math> — time for a single <code>matmul_subroutine</code> call</li>
+    <li><d-math>C</d-math> — number of CPU cores</li>
+    <li><d-math>h</d-math> — pthread overhead per thread (create + join)</li>
+  </ul>
+
+  <p>Assuming perfect load balancing across cores:</p>
+
+  <d-math block>T_{\text{serial}} = S \cdot T</d-math>
+  <d-math block>T_{\text{parallel}} = \frac{S \cdot T}{C} + S \cdot h</d-math>
+
+  <p>Setting <d-math>T_{\text{parallel}} \lt T_{\text{serial}}</d-math> and solving for
+  <d-math>T</d-math>:</p>
+
+  <d-math block>
+    \frac{T}{C} + h \lt T
+    \;\Longrightarrow\;
+    h \lt T\!\left(1 - \tfrac{1}{C}\right)
+    \;\Longrightarrow\;
+    \boxed{T^* = \frac{h \cdot C}{C - 1}}
+  </d-math>
+
+  <p>
+    Notice that <d-math>S</d-math> cancels — matrix <em>size</em> does not determine whether
+    threading pays off. The only thing that matters is how long a <em>single dot product</em>
+    takes, which depends solely on the inner dimension <d-math>K</d-math>.
+  </p>
+  <p>
+    On a 4-core machine with <d-math>h = 10^{-4}</d-math> s:
+    <d-math>T^* = 10^{-4} \cdot 4/3 \approx 1.33 \times 10^{-4}</d-math> s.
+    Threading only wins when a single dot product takes longer than 133 µs.
+  </p>
+
+  <h3>Measuring the Subroutine</h3>
+
+  <p>
+    We benchmark <code>matmul_subroutine</code> across inner dimensions to find where
+    <d-math>T</d-math> crosses <d-math>T^*</d-math>:
+  </p>
+
+  <table class="timing-table">
+    <thead>
+      <tr>
+        <th>Inner dim <d-math>n</d-math></th>
+        <th>Time <d-math>T</d-math> (s)</th>
+        <th>Regime</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>100</td><td>0.0000010</td><td>serial wins by 133×</td></tr>
+      <tr><td>1,000</td><td>0.0000040</td><td>serial wins by 33×</td></tr>
+      <tr><td>10,000</td><td>0.0000350</td><td>serial wins by 3.8×</td></tr>
+      <tr class="crossover-row"><td>~27,000</td><td>~0.000133</td><td>↔ crossover</td></tr>
+      <tr><td>100,000</td><td>0.0004900</td><td>parallel wins</td></tr>
+      <tr><td>1,000,000</td><td>0.0038400</td><td>parallel wins</td></tr>
+      <tr><td>10,000,000</td><td>0.0313800</td><td>parallel wins</td></tr>
+      <tr><td>100,000,000</td><td>0.3031080</td><td>parallel wins</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The scaling is linear in <d-math>n</d-math> as expected, confirming
+    <d-math>O(n)</d-math> behavior. The empirical crossover sits near
+    <d-math>n \approx 27{,}000</d-math>.
+  </p>
+
+  <figure>
+    <canvas id="timingChart" style="max-height: 380px;"></canvas>
+    <figcaption>
+      Execution time of a single <code>matmul_subroutine</code> call vs. inner dimension
+      <d-math>n</d-math>, plotted on log-log axes. The red dashed line marks
+      <d-math>T^*</d-math> — threading pays off to the right. Adjust the sliders below
+      to move the threshold for your hardware.
+    </figcaption>
+  </figure>
+
+  <h3>Interactive: Find Your Crossover Point</h3>
+
+  <p>
+    Measure <d-math>h</d-math> on your machine using the overhead measurement code above,
+    then tune the slider to see where threading starts to pay off.
+  </p>
+
+  <div class="widget-box">
+    <div class="widget-grid">
+      <div>
+        <label for="h-slider">Thread overhead <em>h</em></label>
+        <input type="range" id="h-slider" min="10" max="500" value="100" step="5"
+               oninput="updateCrossover()">
+        <div class="widget-val" id="h-display">100 µs</div>
+      </div>
+      <div>
+        <label for="cores-select">Number of cores <em>C</em></label>
+        <select id="cores-select" onchange="updateCrossover()">
+          <option value="2">2 cores</option>
+          <option value="4" selected>4 cores</option>
+          <option value="8">8 cores</option>
+          <option value="16">16 cores</option>
+          <option value="32">32 cores</option>
+        </select>
+      </div>
+    </div>
+    <div class="widget-result">
+      <div>
+        <d-math>T^* = hC/(C-1)</d-math> = <strong id="tstar-display">133 µs</strong>
+      </div>
+      <div style="margin-top: 0.5rem;">
+        Threading pays off when inner dimension <d-math>n \gtrsim</d-math>
+        <span class="big-num" id="crossover-display">27,000</span>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The empirical crossover (~27,000) agrees reasonably with the theoretical prediction.
+    The gap arises from our simplified overhead model — cache effects, scheduler
+    latency, and contention on thread-local storage also contribute to <d-math>h</d-math>
+    in practice.
+  </p>
+
+  <h2>A Smarter Matrix Multiply</h2>
+
+  <p>
+    Now we can build an adaptive implementation. Check the inner dimension at runtime
+    and dispatch accordingly:
+  </p>
+
+<pre><code class="language-c">/* Empirically tuned for this machine; re-measure h and recompute for yours. */
+#define CROSSOVER_N 27000
+
+Matrix *matmul_smart(Matrix *A, Matrix *B) {
+    if (A->n_cols &lt; CROSSOVER_N)
+        return matmul(A, B);                /* serial: overhead would dominate */
+    else
+        return matmul_parallel_naive(A, B); /* parallel: computation dominates */
+}</code></pre>
+
+  <p>
+    Benchmarked across 42 matrix configurations with increasing inner dimension, each
+    averaged over 30 runs: <code>matmul_smart</code> matches serial performance for small
+    <d-math>n</d-math> and tracks the parallel speedup for large <d-math>n</d-math>,
+    staying below the extrapolated serial curve throughout.
+  </p>
+
+  <h2>Takeaway</h2>
+
+  <p>
+    Multi-threading is not always the right tool. Thread creation and joining introduce
+    overhead on the order of 100 µs per thread on typical hardware. The right question
+    when parallelizing a routine is not <em>"can I thread this?"</em> but
+    <em>"does the per-unit computation time exceed <d-math>hC/(C-1)</d-math>?"</em>
+  </p>
+  <p>
+    Measure your overhead, compute the threshold, hard-code the constant, and let the
+    code decide.
+  </p>
+
+</d-article>
+
+<d-appendix>
+  <d-footnote-list></d-footnote-list>
+</d-appendix>
+
+<script>
+(function () {
+  const ns = [100, 1000, 10000, 100000, 1000000, 10000000, 100000000];
+  const ts = [1.0e-6, 4.0e-6, 3.5e-5, 4.9e-4, 3.84e-3, 3.138e-2, 3.031e-1];
+  const SLOPE = 4.9e-9;
+
+  let chart = null;
+
+  function buildChart() {
+    const ctx = document.getElementById('timingChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'Measured T(n)',
+            data: ns.map((n, i) => ({ x: n, y: ts[i] })),
+            backgroundColor: '#2b6cb0',
+            pointRadius: 7,
+            pointHoverRadius: 9,
+          },
+          {
+            label: 'O(n) fit',
+            data: ns.map(n => ({ x: n, y: SLOPE * n })),
+            type: 'line',
+            borderColor: '#999',
+            borderDash: [5, 4],
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+          },
+          {
+            label: 'T* threshold',
+            data: [{ x: 27000, y: 5e-8 }, { x: 27000, y: 1.0 }],
+            type: 'line',
+            borderColor: '#c0392b',
+            borderDash: [7, 4],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        animation: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                if (ctx.dataset.label === 'Measured T(n)')
+                  return `n=${ctx.parsed.x.toLocaleString()}: T=${ctx.parsed.y.toExponential(2)}s`;
+                return null;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: 'logarithmic',
+            title: { display: true, text: 'Inner dimension n' },
+            grid: { color: '#eee' },
+          },
+          y: {
+            type: 'logarithmic',
+            title: { display: true, text: 'Time (seconds)' },
+            grid: { color: '#eee' },
+          },
+        },
+      },
+    });
+  }
+
+  window.updateCrossover = function () {
+    const h_us = parseFloat(document.getElementById('h-slider').value);
+    const C    = parseInt(document.getElementById('cores-select').value);
+    const h    = h_us * 1e-6;
+    const T_star = (h * C) / (C - 1);
+    const n_star = Math.round(T_star / SLOPE);
+
+    document.getElementById('h-display').textContent = h_us + ' µs';
+    document.getElementById('tstar-display').textContent = (T_star * 1e6).toFixed(0) + ' µs';
+    document.getElementById('crossover-display').textContent = n_star.toLocaleString();
+
+    if (chart) {
+      chart.data.datasets[2].data = [{ x: n_star, y: 5e-8 }, { x: n_star, y: 1.0 }];
+      chart.update('none');
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    buildChart();
+    updateCrossover();
+  });
+})();
+</script>
+
+</body>
+</html>

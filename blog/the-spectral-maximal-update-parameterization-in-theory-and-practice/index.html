@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Spectral Maximal Update Parameterization in Theory and Practice - Kyle R. Chickering</title>
+    <link rel="stylesheet" href="../../static/css/main.css">
+    <link rel="stylesheet" href="../../static/css/synthwave.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+    ]});"></script>
+    <script>
+        // Apply theme immediately to prevent flash of unstyled content
+        if (localStorage.getItem('synthwave-theme') === 'on') {
+            document.documentElement.classList.add('synthwave');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a class="site-title" href="../../index.html">Kyle R. Chickering</a>
+            <div class="nav-links">
+                <a href="../../index.html">Home</a>
+                <a href="../../blog/index.html">Blog</a>
+                <button id="theme-toggle" class="theme-toggle">Synthwave</button>
+            </div>
+        </nav>
+        <article>
+    <div class="post-header">
+        <div class="post-meta">December 2025</div>
+        <h1>🛩️ The Spectral Maximal Update Parameterization in Theory and Practice</h1>
+    </div>
+    <p><strong>Kyle R. Chickering - kyrochickering@gmail.com<br />
+</strong>Work Completed while author was affiliated with****UC Davis <a href="https://luka-group.github.io">LUKA Lab</a> &amp; MBZUAI <a href="https://ifm.ai">Institute of Foundation Models</a></p>
+<p>[ <strong><a href="../../index.html">Homepage</a></strong>]</p>
+<p>Last updated: 02.15.26</p>
+<p><strong>Table of Contents</strong></p>
+<h1 id="introduction">Introduction</h1>
+<p>The maximal parameterization update ($\mu$P) <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a>has proven itself a valuable tool for reducing pre-training costs at scale. Beyond enabling learning rate transfer across model scales, $\mu$P improves training dynamics by ensuring that learning occurs at the same rate across disparate layers. For large-scale training runs a correct $\mu$P implementation could save millions of dollars in compute. For researchers and engineers, correctly implementing $\mu$P reduces the dimensionality of hyperparameter sweeps and produces more reliable results by getting models closer to compute optimal. Additionally, $\mu$P eliminates a common pitfall in the literature where two models are compared but only one model is hyperparameter tuned, which can lead to misleading or downright incorrect conclusions about model scaling and behavior.</p>
+<p>$\mu$P is not merely a theoretical consideration. During training under the standard parameterization different layers learn at different rates, effectively freezing the embeddings during training and wasting compute on sub-optimal weight updates. When using $\mu$P for large networks we can attain lower losses by ensuring all layers learn at the correct rate. $\mu$P also helps reduce tuning costs when preparing for large-scale training runs. By enabling zero-shot hyperparameter transfer (see the figure below) we can cheaply tune small models and avoid the expensive extrapolation and validation steps required to find the optimal hyperparmeters for large models.</p>
+<p><img alt="mutransfer.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/mutransfer.png" /></p>
+<p>This blog post is not a comprehensive introduction or tutorial on $\mu$P; we assume that the reader has some familiarity with $\mu$P, either through reading or attempting to read the Tensor Programs V paper (TP-V) <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a>or through a resource like Dey’s Practitioner’s Guide to $\mu$P <a href="https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization">(Dey et al. 2024)</a>. This blog post is intended for audiences who want a practical tool-kit for applying $\mu$P, and who don’t have time to sort through the developments in the literature over the past several years. In particular we want to extend the practitioner’s toolkit so that they can implement $\mu$P models which go beyond the original width-based models studied by Yang. The development of $\mu$P now spans nearly half a decade and involves challenging mathematics, rendering much of the theory difficult to access. We view this as unfortunate, and believe that the mathematics and understanding yielded by $\mu$P are extremely valuable for ML practitioners. To increase the understanding and awareness of $\mu$P we present a heuristic approach to $\mu$P derivations, based largely on the more recent “spectral perspective” of $\mu$P <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>.</p>
+<p>We argue that this later approach is better suited for understanding and deriving $\mu$P. The original $\mu$P formulation is derived by studying the updates of the weight matrices through constraints on the outputs of the the matrix multiply. Spectral $\mu$P instead directly constrains the weight matrices themselves. This will also allow us to directly derive $\mu$P scalings for depth. Additionally, the original $\mu$P formulation admits a subtle failure mode where all of the conditions for feature learning are satisfied but learning rate transfer does not occur (see below). Spectral $\mu$P prevents this failure mode from occurring.</p>
+<p>From a practitioner’s perspective, having conditions directly on the weight matrices instead of on the layer outputs allows us to directly understand and debug $\mu$P implementations, instead of trying to intuit the behavior of matrices by looking only at the outputs to each layer.</p>
+<p>We strive to present a distillation of the mathematical theory and as such many of our results are not rigorous. However rigorous statements for our results can be found scattered throughout the literature.</p>
+<p>Throughout we discuss practical insights that we have learned through the process of deriving, implementing, and debugging $\mu$P. We hope that this guide can serve as a valuable resource for practitioners moving forward in implementing $\mu$P, and we advocate for using either $\mu$P or Muon for large scale training moving forwards.</p>
+<h3 id="contributions">Contributions</h3>
+<p>In this blog post we:</p>
+<ul>
+<li>
+<p>Argue that the spectral conditions for feature learning, originally derived in <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>, should form the basis of our understanding of $\mu$P.</p>
+</li>
+<li>
+<p>Provide a set of heuristics based on random matrix theory and Tensor Programs which allow $\mu$P to be applied in contexts beyond the original derivation.</p>
+</li>
+<li>
+<p>Briefly discuss whether or not learning rate and weight decay can be transferred across batch sizes in addition to model sizes.</p>
+</li>
+<li>
+<p>Demonstrate that using spectral $\mu$P perspective eliminates a particular failure case in the standard method of validating a $\mu$P implementation: coordinate checking.</p>
+</li>
+</ul>
+<h1 id="a-brief-history-of-mup">A Brief History of $\mu$P</h1>
+<p>The seminal paper in the study of $\mu$P is the Tensor Programs V paper (TP-V) <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a> which presented the successful application of Tensor Programs to improving real-world training dynamics. We briefly note that this is the fifth paper in what is generally considered a six to ten paper series (depending on how you’re counting). We will not focus on the first four papers in this blog <a href="https://arxiv.org/abs/1910.12478">(Yang 2019)</a><a href="https://arxiv.org/abs/2006.14548">(Yang 2020a)</a><a href="https://arxiv.org/abs/2009.10685">(Yang 2020b)</a><a href="https://arxiv.org/abs/2011.14522">(Yang &amp; Hu 2020)</a>, but emphasize that the $\mu$-transfer theory posed in TP-V crucially builds on Yang’s previously developed theory. The original TP-V paper addresses learning rate transfer across width, and we discuss extensions and attempted extensions of this work below.</p>
+<p>It’s been three years since the TP-V paper, and the community has explored improvements in understanding of $\mu$P as well as validation of $\mu$P up to the 13B scale <a href="https://arxiv.org/abs/2304.03208">(Dey et al. 2023)</a>. Anecdotal rumors are that several of the large frontier labs are using $\mu$P at much larger scales than this.</p>
+<p>In terms of theoretical developments we choose to emphasize the “spectral $\mu$P” paper written by Yang, Simons, and Bernstein <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>which re-formulates $\mu$P in terms of spectral weight norms. We will discuss this theoretical perspective in much greater detail below. Yang’s group also attempted to apply $\mu$P to the case of depth <a href="https://arxiv.org/abs/2310.02244">(Yang et al. 2023a)</a>(TP-VI), but was only able to get successful feature learning with residual blocks consisting of a single linear weight matrix and as such does not apply to the practical case of training LLMs. Finally, practitioners should be aware of the Complete-P paper <a href="https://arxiv.org/abs/2505.01618">(Dey et al. 2025)</a>, which primarily addresses the deficiencies in the TP-VI paper and derives the correct $\mu$P parameterization for depth. We consider this paper to be the current state of the art for applying $\mu$P in practice. The authors additionally derive scalings for other aspects of LLM training which were left out from the original $\mu$P papers. We suggest that the Complete-P paper be used as a reference for implementing $\mu$P since they have the most comprehensive table of parameter scalings.</p>
+<p>More recently our own group has extended the $\mu$P theory to cover the challenging case of grouped query attention (GQA) which required some subtle extensions to the overall theory <a href="https://openreview.net/forum?id=UJB2uOS9MR">(Chickering et al. 2025)</a>.</p>
+<p>Finally, as this blog post was being finished, Soufiane Hayou released the first actual mathematical proof that learning rate transfers under $\mu$P <a href="https://arxiv.org/abs/2511.01734">(Hayou 2025)</a>. This exciting new work finally bridges the gap between the theoretical intuitions of TP-V and a rigorous theory of learning rate transfer.</p>
+<h1 id="spectral-mup">Spectral $\mu$P</h1>
+<p>The Tensor Programs V paper proposes a method for zero-shot hyperparameter tuning by carefully applying the analysis from Tensor Programs to determine the proper learning rate and initialization schemes for a neural network <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a>. To this end the authors define the concept of <strong>feature learning</strong>. Let $\bm{h}<em t-1="t-1">t^{(\ell)}$ be the activations of the $\ell$-th layer of the neural network at timestep $t$, and let $\Delta \bm{h}_t^{(\ell)}:=\bm{h}_t^{(\ell)}-\bm{h}</em>\in \R^n$, we say that feature learning is occurring for the layer if}^{(\ell)}$. If the output of the $\ell$-th layer is $\bm{h}_t^{(\ell)</p>
+<p>$$||\,\bm{h}_t^{(\ell)}\,||_2=\Theta(\sqrt{n}), \qquad ||\,\Delta \bm{h}_t^{(\ell)}\,||_2=\Theta(\sqrt{n}), \tag{1}$$</p>
+<p>as $n\rightarrow \infty$. The authors show that for a network satisfying feature learning at every layer we should (with some caveats) expect that the learning rate transfers across models of different width $n$. In other words, we can sweep hyperparameters (learning rate) at some $n=n_0$ and use those same hyperparameters (learning rate) for a model with $n=n_*$.</p>
+<p>The theory is called <strong>maximal</strong> (as in <strong>maximal</strong> update parameterization) because if the layer updates $\Delta \bm{h}_t^{(\ell)}$ were any smaller (asymptotically) we would learn very slowly, but if they were any bigger the training would diverge. Thus, this $\sqrt{n}$ scaling is precisely the fastest we can update our weights without the training diverging.</p>
+<p>While groundbreaking, $\mu$P and an intuitive understanding of feature learning remained challenging after the publication of TP-V. In a follow-up work, Yang, Simons, and Bernstein provide a more mathematically satisfying explanation and intuition for feature learning, phrased in terms of the weights of a neural network instead of the activations <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>. This viewpoint is preferable for several reasons:</p>
+<ol>
+<li>
+<p>The adjustments to the neural network are done through the weights, not through the activations, so a theory based purely on the network weights allows more direct access to quantities we are scaling / adjusting; it is easier to have a theory based directly on $\bm{W}$ than based tangentially through $\bm{W}\bm{x}$.</p>
+</li>
+<li>
+<p>The update maximality becomes quite obvious, rather than being obscured behind a matrix-vector product. Practically speaking, using the spectral theory rather than the original theory allows us to avoid some subtle failures in the original conception of $\mu$P: we show that the spectral conditions are more stringent than the original conception.</p>
+</li>
+<li>
+<p>In terms of norms on the weights we get a better intuition of what conditions about the network lead to learning rate transfer. It is arguable that this viewpoint helped lead to the development of the Muon optimizer <a href="https://kellerjordan.github.io/posts/muon/">(Jordan et al. 2024)</a>.</p>
+</li>
+</ol>
+<p>In particular, Yang et al. prove that conditions on the spectral norm of the weight matrices (see equation $(2)$ below) imply that feature learning in the sense of equation $(1)$ holds.</p>
+<p>To follow their argument we consider a dense MLP network with input dimension $d_{\text{in}}$, output dimension $d_{\text{out}}$, and hidden dimension $n$. We consider the case where both $d_{\text{in}}$ and $d_{\text{out}}$ are fixed but we scale the hidden dimension $n$. This setting can be mapped to transformer LLMs and conv-nets with little to no modification, but we choose this simple setting for pedagogical purposes. We then set $n_{\text{in}}^{(\ell)}=d_{\text{in}}$ for the input layer, and $n_{\text{in}}^{(\ell)}=n$ for the hidden and output layers, as well as $n_{\text{out}}=n$ for the input and hidden layers, and $n_{\text{out}}=d_{\text{out}}$ for the output layer.</p>
+<p>Under this notation, <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>prove that the weights of layer $\ell$ at timestep $t$, given by $\bm{W}^{(\ell)}<em _text_out="\text{out">t\in \R^{n</em>}}^{(\ell)}\times n_{\text{in}}^{(\ell)}}$, and the updates $\Delta \bm{W<em t-1="t-1">t^{(\ell)}:=\bm{W}_t^{(\ell)} - \bm{W}</em>$, should satisfy the following constraints on their spectral norm}^{(\ell)</p>
+<p>$$||\,\bm{W}<em _text_out="\text{out">t^{(\ell)}\,||=\Theta\left(\frac{\sqrt{n</em>}}^{(\ell)}}}{\sqrt{n_{\text{in}}^{(\ell)}}}\right), \qquad  ||\,\Delta\bm{W<em _text_out="\text{out">t^{(\ell)}\,||=\Theta\left(\frac{\sqrt{n</em>$$}}^{(\ell)}}}{\sqrt{n_{\text{in}}^{(\ell)}}}\right). \tag{2</p>
+<p>Recall that the spectral norm, or induced 2-norm, is given by</p>
+<p>$$||\,\bm{A}\,||:=\sup_{||\,\bm{x}\,||_2=1}\,||\,\bm{A}\bm{x}\,||_2.$$</p>
+<p>In what follows we dispense with full rigor and focus on the essence of the mathematical argument. However we stress that the statements made here can be made fully rigorous, and indeed this is done in <a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a>.</p>
+<p>Informally, during neural network training we have the relationship</p>
+<p>$$||\,\bm{W}_t^{(\ell)}\bm{x}\,||_2=\Theta(||\,\bm{W}_t^{(\ell)}\,||\,||\,\bm{x}\,||_2),$$</p>
+<p>from which the implication that $(2)\,\Rightarrow\,(1)$ becomes quite clear if we ignore the activation function, since we have assumed recursively that the inputs $\bm{x}$ satisfy the feature learning condition $(1)$.</p>
+<p><strong>Spectral </strong>$\mu$<strong>P is Stronger than Feature Learning</strong></p>
+<p>The reverse implication is <strong>not</strong> true. Feature learning in the sense of condition $(1)$ does <strong>not</strong> imply that the spectral feature learning condition $(2)$ is met.</p>
+<p>Consider a weight matrix $\bm{W}\in \R^{n\times n}$ with weight update $\Delta \bm{W}$. Assume that the $||\,\bm{W}_0\,||=\Theta(1)$, but that $||\,\Delta \bm{W}_t\,||= \Theta(n^{-\alpha})$ for some $\alpha &gt; 0$. Further assume that the inputs to this layer satisfy feature learning, that is $||\,\bm{h}_t\,||_2 = \Theta(\sqrt{n}), ||\,\Delta \bm{h}_t\,||_2 = \Theta(\sqrt{n})$. Ignoring the non-linearity, it is clear that this weight matrix does not satisfy the conditions $(2)$ of spectral $\mu$P. However, note that</p>
+<p>$$||\,\bm{W}<em _tau="1">t\bm{h}_t\,||_2 = ||\,\bm{W}_0\bm{h}_t + \sum</em>}^t\Delta \bm{W<em _tau="1">\tau \bm{h}_t\,|| = \Theta\left(||\,\bm{h}_t\,||_2 + \sum</em>),$$}^tn^{-\alpha}||\,\bm{h}_t\,||_2\right) = \Theta(\sqrt{n</p>
+<p>so the output of the layer scaling satisfies feature learning in the sense of $(1)$. Furthermore</p>
+<p>$$||\,\Delta(\bm{W}\bm{h})_t\,||_2 = ||\,\Delta\bm{W}_t\bm{h}_t + \bm{W}_t \Delta \bm{h}_t\,||_2 = \Theta(||\,\Delta \bm{W}_t\,||\,||\,\bm{h}_t\,||_2 + ||\,\bm{W}_t\,||\,||\,\Delta \bm{h}_t\,||_2) = \Theta(n^{1/2-\alpha} + n^{1/2})=\Theta(\sqrt{n}),\tag{3}$$</p>
+<p>and the updates also satisfy $(1)$. Thus, feature learning is occurring despite the fact that the spectral conditions are not satisfied!</p>
+<p>The reason for this failure should be quite clear: If a weight matrix is sub-maximally updated (in this case $||\,\Delta \bm{W}\,||= o(1)$), then the <em>correct</em> scaling from the previous layer is propagated to the current layer purely through the initialized weights $\bm{W}_0$. This can be taken to the extreme case by setting the weight updates identically to zero, and we see that feature learning in the sense of $(1)$ continues to occur (see below for an empirical demonstration of this fact).</p>
+<p>This is an important distinction because the impetus for $\mu$P is to be maximally training the network. Quite literally we would like the weight updates specifically to be updated as maximally as possible. However this criteria is not actually enforced by condition $(1)$, even though this is the philosophical motivation for a feature learning condition like $(1)$. Thus, we suggest that the spectral feature learning condition is the “correct” perspective for maximal update parameterizations, and that this stronger conception of feature learning should be the basis for theory moving forwards.</p>
+<p><strong>A Misconception about </strong>$\mu$<strong>P and Time</strong></p>
+<p>We briefly address a common misconception that we have encountered when discussing $\mu$P. Many readers have read TP-V and come away with the conclusion that $\mu$P makes predictions on the size of network activations through <strong>time</strong>. However this is manifestly not the case.</p>
+<p>Consider the more detailed notation $f(\bm{a}; \bm{b}) =\Theta_{\bm{a}}(A)$, where $f$ is some function depending on the parameters $\bm{a}, \bm{b}$. The notation $\Theta_{\bm{a}}(A)$ means that we have the inequality</p>
+<p>$$c(\bm{b})A(\bm{a})\leqslant f(\bm{a}; \bm{b}) \leqslant C(\bm{b})A(\bm{a}),$$</p>
+<p>where $0 &lt; c(\bm{b}), C(\bm{b}) &lt; \infty$ are constants (in $\bm{a}$) and the inequality is expected to hold for all $\bm{a}$ in some unbounded subset of $\bm{a}\ni \R^d$.</p>
+<p>Specifically for $\mu$P, we make statements about the spectral norm of the form $||\,\bm{W}<em n="n">t\,||=\Theta</em>(A(n))$, and notably we <strong>do not</strong> make statements of the form $||\,\bm{W}<em n_t="n,t">t\,||=\Theta</em>_t\,||=\Theta(1)$, this simply means that as we scale $n$, the hidden size, we must have}(A(n, t))$. Thus, when we say that $||\,\bm{W</p>
+<p>$$c(t)\leqslant ||\,\bm{W}_t(n)\,||\leqslant C(t).$$</p>
+<p>All that $\mu$P says about the upper and lower bounds <strong>in time</strong> is that the bounds cannot depend on the network width, for sufficiently large networks. In other words, there exist width dependent upper and lower bounds, but absolute upper and lower bounds <strong>in time</strong>, with respect to width:</p>
+<p>$$c(t) \leqslant \widetilde{c}(t, n) \leqslant ||\,\bm{W}_t(n)\,||\leqslant \widetilde{C}(t, n)\leqslant C(t).$$</p>
+<p>Coordinate checking across time will <strong>not</strong> necessarily show constant behavior as it does when we coordinate check across network width.</p>
+<h1 id="a-heuristic-toolkit">A Heuristic Toolkit</h1>
+<p>While the mathematics underlying $\mu$P may be both deep and complicated, we have found in practice that deriving $\mu$P for new architectures requires insight into neither Tensor Programs nor random matrix theory. Rather, $\mu$P derivations can typically be done using a few simple heuristics (which are, of course, ultimately derived from Tensor Programs and random matrix theory!). We present these heuristics which can be used to understand the observed dynamics of neural network training and allow practitioners to derive novel $\mu$P scalings.</p>
+<p>At a high-level, what we will do is assume that the spectral feature learning conditions $(2)$ ensure hyperparameter transfer, and then systematically examine the weight matrices in the network and make sure that they satisfy these conditions.</p>
+<p>In what follows we will use the notion of “typical size” which is used by Yang and is common in the random matrix theory literature <a href="https://terrytao.wordpress.com/wp-content/uploads/2011/08/matrix-book.pdf">(Tao 2012)</a>. Readers may instead know this quantity as the first absolute moment and it is given by</p>
+<p>$$a_i = \Theta(A), \quad\Rightarrow\quad \mathbb{E}|a_i|=A,$$</p>
+<p>with $a_i = \Theta(A)$ denoting that $a_i$ is of typical size $A$. This is used to understand what we expect the entires of a random matrix to look like, and is commonly used to heuristically estimate norms of a matrix or vector. As an example computation, consider a random vector $\bm{x}_i$ with typical size $p$. We can apply the law of large numbers (LLN) to heuristically estimate</p>
+<p>$$||\,\bm{x}\,||<em i="i">2^2 = \sum</em>|x_i|^2\right) = \Theta(np^2).$$}|x_i|^2 = \Theta\left(n\mathbb{E</p>
+<p>With these preliminaries dispensed with we now introduce our heuristics which we can use to derive $\mu$P in a variety of settings. Our first heuristic regards the scaling of the model gradient as a function of the layer width:</p>
+<p><strong>Heuristic 1:</strong> Gradients</p>
+<p>Gradients scale like</p>
+<p>$$\nabla_{\bm{W}_t^{(\ell)}}L(\bm{W}_t)=\begin{cases}\Theta(1),\qquad&amp;\text{$\ell$ is an output layer} \ \Theta(\frac{1}{n}), \qquad&amp;\text{otherwise}\end{cases}.$$</p>
+<p>Doing our analysis in terms of the spectral norm allows us to use standard theorems from random matrix theory to understand how the size of the weight matrices changes as a function of their input shapes. In particular we can use the Bai-Yin theorem <a href="https://projecteuclid.org/journals/annals-of-probability/volume-21/issue-3/Limit-of-the-Smallest-Eigenvalue-of-a-Large-Dimensional-Sample/10.1214/aop/1176989118.full">(Bai &amp; Yin 1993)</a><a href="https://link.springer.com/article/10.1007/BF00353874#citeas">(Yin et al. 1988)</a>which tells us how the spectral norm of a rectangular random matrix scales. We note that there are some additional caveats to applying Bai-Yin, but all of them are satisfied in practice during neural network training:</p>
+<p><strong>Heuristic 2:</strong> Bai-Yin Theorem</p>
+<p>Let $\bm{W}\in \R^{m\times n}$ with entries sampled i.i.d. from $\mathcal{N}(0, \sigma^2)$, then we have</p>
+<p>$$||\,\bm{W}\,||=\sigma(\sqrt{n}+\sqrt{m}) + \text{L.O.T.}$$</p>
+<p>In particular, as $m$ and $n$ grow large we have</p>
+<p>$$||\,\bm{W}\,||=\Theta\left(\sigma(\sqrt{n}+\sqrt{m})\right).$$</p>
+<p>If $\bm{W}$ is instead sampled from a distribution with non-zero mean $\mathcal{N}(\mu, \sigma^2)$ then we have</p>
+<p>$$||\,\bm{W}\,||=\Theta(\mu\sqrt{nm}).$$</p>
+<p>Finally, while the internal representations of a neural network do not actually look i.i.d. Gaussian, we have found that treating them as if they are i.i.d. Gaussian is a productive way to derive $\mu$P:</p>
+<p><strong>Heuristic 3:</strong> Playing pretend</p>
+<p>$\mu$P scalings can be derived by assuming that $\bm{W}_0, \Delta\bm{W}_t$ are sampled i.i.d. from a Gaussian distribution. Furthermore we can always assume that the previous layer quantities $\bm{h}_t$ and $\Delta \bm{h}_t$ are i.i.d. sampled from a Gaussian.</p>
+<p>Heuristic 3 is certainly not rigorous, in fact it isn’t actually even true! But we find in practice that to derive the first order scalings of the weight spectral norms this assumption is sufficient to capture the actual training dynamics.</p>
+<h2 id="example-derivations">Example Derivations</h2>
+<h3 id="network-initialization">Network Initialization</h3>
+<p>The network initialization can be directly read off of equation $(2)$ together with Heuristic 2 (the Bai-Yin theorem), since for a weight matrix $\bm{W}\in\R^{m\times n}$</p>
+<p>$$||\,\bm{W}\,||=\underbrace{\Theta(\sigma(\sqrt{n}+\sqrt{m}))}<em _2_="$(2)$" _text_Equation="\text{Equation">{\text{Heuristic 2}}=\underbrace{\Theta\left(\frac{\sqrt{m}}{\sqrt{n}}\right)}</em>.$$}</p>
+<p>Solving for the standard deviation gives</p>
+<p>$$\sigma = \frac{\sqrt{m}}{n+\sqrt{nm}}.$$</p>
+<p>If we carefully track which of the dimensions is being scaled, then we arrive at the standard $\mu$P initialization rule:</p>
+<p>$$\sigma^\ell = \begin{cases}\Theta(n^{-1}), \qquad &amp;\text{$\ell$ is an output layer}, \ \Theta(n^{-1/2}), \qquad &amp;\text{$\ell$ is a hidden layer}, \ \Theta(1), \qquad &amp;\text{$\ell$ is an input layer}\end{cases}.$$</p>
+<h3 id="sgd">SGD</h3>
+<p>Stochastic gradient descent is the easiest optimizer to study. We simply update the weights according to</p>
+<p>$$\bm{W}<em t-1="t-1">t^{(\ell)} = \bm{W}</em>_t),$$}^{(\ell)}-\eta^{(\ell)}\nabla_{\bm{W}_t^{(\ell)}}L(\bm{W</p>
+<p>where $\eta$ is the learning rate hyperparameter. According to the spectral condition $(2)$, this then implies that we must have</p>
+<p>$$||\,\Delta \bm{W}<em _bm_W="\bm{W">t^{(\ell)}\,||=\eta^{(\ell)}\,||\,\nabla</em>_t)\,||.$$}_t^{(\ell)}}L(\bm{W</p>
+<p>Determining the correct scaling for the per-layer learning rates $\eta^{(\ell)}$ is then reduced to understanding how the gradient scales in spectral norm. From Heuristic 1 we know how the individual elements of the gradient $\nabla_{\bm{W}_t^{(\ell)}}L(\bm{W}_t)$ scale, and thus we compute that</p>
+<p>$$||\,\nabla_{\bm{W}_t^{(\ell)}}L(\bm{W}_t)\,||=\begin{cases}\Theta(\sqrt{n}), &amp;\qquad \text{$\ell$ is an output layer}, \ \Theta(1), &amp;\qquad \text{$\ell$ is a hidden layer}, \ \Theta(1/\sqrt{n}), &amp;\qquad \text{$\ell$ is an input layer}\end{cases}.$$</p>
+<p>Thus, we can use the spectral feature learning condition $(2)$ to read off the learning rate scalings</p>
+<p>$$\eta^{(\ell)} = \begin{cases}\Theta(n^{-1}), \qquad &amp;\text{$\ell$ is an output layer}, \ \Theta(1), \qquad &amp;\text{$\ell$ is a hidden layer}, \ \Theta(n), \qquad &amp;\text{$\ell$ is an input layer} \end{cases}.$$</p>
+<h3 id="adam">Adam</h3>
+<p>The Adam optimizer <a href="https://arxiv.org/abs/1412.6980">(Kingma &amp; Ba 2014)</a>builds on SGD by tracking the first and second moments of the gradients over time</p>
+<p>$$\begin{align<em>}g_t &amp;= \nabla_{\bm{W}<em t-1="t-1">t^{(\ell)}}L(\bm{W}_t), \ m_t &amp;= \beta_1 m</em>,\end{align}+(1-\beta_1)g_t, \ v_t &amp;= \beta_2v_{t-1}+(1-\beta_2)g_t^2, \ \hat{m}_t &amp;= \frac{m_t}{1-\beta_1^t}, \ \hat{v}_t&amp;=\frac{v_t}{1-\beta_2^t}, \ \hat{r}_t:&amp;=\frac{\hat{m}_t}{\sqrt{\hat{v}_t}+\varepsilon</em>}$$</p>
+<p>and then the weight update is given by</p>
+<p>$$\bm{W}<em t-1="t-1">t^{(\ell)}=\bm{W}</em>_t.$$}^{(\ell)}-\eta^{(\ell)}\hat{r</p>
+<p>How large are the Adam optimizer steps $\hat{r}_t$? From Heuristic 1 we know how the gradients scale, and thus</p>
+<p>$$m_t = \Theta(\nabla_{\bm{W}_t^{(\ell)}}L(\bm{W}_t)),$$</p>
+<p>due to the linearity of addition. Similarly, the typical size of the Hadamard product of the gradient has the typical size</p>
+<p>$$v_t = \Theta((\nabla_{\bm{W}<em _bm_W="\bm{W">t^{(\ell)}}L(\bm{W}_t))^2) \quad \Rightarrow \quad \sqrt{\hat{v}_t}=\Theta(\nabla</em>_t)).$$}_t^{(\ell)}}L(\bm{W</p>
+<p>In particular we then expect that the typical size of the $\hat{r}_t$ is</p>
+<p>$$\hat{r}_t = \Theta(1), \qquad \varepsilon \ll \sqrt{\hat{v}_t}.$$</p>
+<p>Technically we can be more precise and determine exactly how small $\varepsilon$ must be to get consistent training dynamics. This scaling was first observed in the literature seemingly independently by <a href="https://arxiv.org/abs/2505.01618">(Dey et al. 2025)</a> and <a href="https://arxiv.org/abs/2407.05872">(Everett et al. 2024)</a>. Let $\overline{m}_t = A(n)\hat{m}_t = \Theta(1)$ and $\overline{v}_t=A^2(n)\hat{v}_t=\Theta(1)$, where $A(n)$ captures the heterogeneity of the gradient scaling between layers. After some algebra we arrive at the informal scaling</p>
+<p>$$\hat{r}_t = \frac{\overline{m}_t}{\sqrt{\overline{v}_t} + A(n)\varepsilon}.$$</p>
+<p>This implies that for transferable dynamics to continue, we must induce a dependence $\varepsilon(n)$ so that $A(n)\varepsilon(n)=\Theta(1)$. We find in practice that for small-scale experimentation that setting $\varepsilon$ small (say $\varepsilon &lt; 10^{-10}$) suffices to have transferable dynamics without adjusting the Adam $\varepsilon$ parameter. However for large-scale runs $\overline{m}_t$ and $\overline{v}_t$ may shift significantly in time and violate the $\mu$P hypotheses in practice.</p>
+<p>Because we know the typical size of the Adam update steps is $\hat{r}_t = \Theta(1)$, we can apply Heuristic 2 to understand that if the weights have shape $\R^{m\times n}$ then the spectral norm is simply $||\,\hat{r}_t\,||=\Theta(\sqrt{mn})$. Then applying the spectral feature learning conditions $(2)$ we have</p>
+<p>$$\eta^{(\ell)} = \begin{cases}\Theta(n^{-1}), \qquad &amp;\text{$\ell$ is an output layer}, \ \Theta(n^{-1}), \qquad &amp;\text{$\ell$ is a hidden layer}, \ \Theta(1), \qquad &amp;\text{$\ell$ is an input layer} \end{cases}.\tag{4}$$</p>
+<h3 id="adamw">AdamW</h3>
+<p>AdamW builds on the the Adam optimizer by additionally adding a weight decay term with decay strength $\lambda^{(\ell)}$<a href="https://arxiv.org/abs/1711.05101">(Loshchilov &amp; Hutter 2017)</a>. The Adam weight update is then replaced by</p>
+<p>$$\bm{W}<em t-1="t-1">t^{(\ell)}=(1-\lambda^{(\ell)}\eta^{(\ell)})\bm{W}</em>$$}^{(\ell)}-\eta^{(\ell)}\frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}, \tag{5</p>
+<p>which adds dynamical pressure to return the weights to the origin at every step. To ensure that these updates retain their correct size in the spectral norm we must have that $\lambda^{(\ell)}\eta^{(\ell)}=\Theta(1)$.</p>
+<p>To see why, suppose that $\lambda^{(\ell)}\eta^{(\ell)}=\Theta(n^{-\alpha})$ for $\alpha &gt; 0$, then in the limit that $n\rightarrow \infty$ our update rule collapses to the original Adam update and we retain no benefit from using weight decay. On the other hand, if $\lambda^{(\ell)}\eta^{(\ell)}=\Theta(n^\alpha)$, then for $n$ sufficiently large our update rule is</p>
+<p>$$\Delta \bm{W}<em t-1="t-1">t^{(\ell)} \sim n^{\alpha}\bm{W}</em>,$$}^{(\ell)</p>
+<p>and our training will cease to be dependent on the data. I.e. meaningful learning becomes impossible.</p>
+<p>These considerations together with the Adam learning rate scaling $(4)$ lead us to conclude that for the weight decay update described in $(5)$ we should scale the weight decay according to</p>
+<p>$$\lambda^{(\ell)} = \begin{cases}\Theta(n), \qquad &amp;\text{$\ell$ is an output layer}, \ \Theta(n), \qquad &amp;\text{$\ell$ is a hidden layer}, \ \Theta(1), \qquad &amp;\text{$\ell$ is an input layer} \end{cases}.$$</p>
+<h3 id="depth-and-complete-p">Depth and Complete-P</h3>
+<p>The spectral $\mu$P framework can also be extended to derive the corrected depth scalings arrived at in Complete-P through the addition of an extraneous desiderata. We argue that the depth scaling from TP-VI is wrong because their updates are too small in norm. We show that depth-$\mu$P does not satisfy the spectral feature learning conditions, and furthermore that assuming the spectral feature learning conditions prevents lazy-learning <a href="https://arxiv.org/abs/2505.01618">(Dey et al. 2025)</a>.</p>
+<p>Thus, we are able to arrive at the correct Complete-P <a href="https://arxiv.org/abs/2505.01618">(Dey et al. 2025)</a>scaling without adding additional desiderata, using only the spectral feature learning conditions.</p>
+<p>For our setting we consider the residual blocks of a depth $L$ network given by</p>
+<p>$$\bm{h}^{\ell+1}=\bm{h}^\ell + L^{-\alpha}\mathcal{F}_\ell(\bm{h}^\ell; \bm{W}^\ell), \qquad \ell=1, \cdots, L,$$</p>
+<p>for a residual block $\mathcal{F}_\ell$ with parameters $\bm{\theta}^\ell$, usually an MLP block. Of course, to study the operator norms we can write this computation as</p>
+<p>$$\bm{G}^\ell:=\left(\bm{I} + L^{-\alpha}\mathcal{F}_\ell(\,\cdot\,;  \bm{W}^\ell)\right), \qquad \ell=1, \cdots, L,$$</p>
+<p>so that $\bm{G}^\ell\bm{h}^{\ell} = \bm{h}^{\ell+1}$. Making standard assumptions about composition and lack of cancellation we have</p>
+<p>$$||\,\bm{G}^\ell\,|| = \Theta\left(||\,\bm{G}^{\ell - 1}\,|| + L^{-\alpha}||\,\mathcal{F}_\ell\,||\right).$$</p>
+<p>Recursing this identity gives us the spectral bound</p>
+<p>$$||\,\bm{G}^L\,|| =\Theta\left(1+L^{1-\alpha}\max_\ell||\,\mathcal{F}_\ell\,||\right).$$</p>
+<p>In order for the network outputs to remain stable at initialization, we require that the summation through the entirety of the network at initialization scales correctly, that is</p>
+<p>$$L^{1-\alpha}\max_\ell||\,\mathcal{F}_\ell\,||=\mathcal{O}(1)$$</p>
+<p>in <strong>both</strong>$L$ and $n$, where $n$ is the hidden size. For typical MLP implementations it is sensible to require that $||\,\mathcal{F}_\ell\,||=\Theta(1)$, in which case we must have that $\alpha=1$ to keep the correct scaling. However this is not the only available way to parameterize depth (see below). Note that for any $\alpha &gt; 1$<a href="https://arxiv.org/abs/2310.02244">(Yang et al. 2023a)</a>prove that the parameterization is trivial (in the limit the network converges to the identity). Another way to think about this is that for non-trivial learning to occur we must have the contributions from the residual branch and the MLP branch be the same asymptotic size at the output of the network.</p>
+<p><strong>Depth </strong>$\mu$<strong>P Doesn’t Satisfy Spectral Feature Learning</strong></p>
+<p>Our first observation is that the proposed depth-$\mu$P framework from TP-VI does not satisfy the spectral feature learning conditions $(2)$. The authors of TP-VI consider MLP blocks $\mathcal{F}_\ell = \bm{W}^\ell\bm{V}^\ell$, with $\bm{W}^\ell, \bm{V}^\ell\in \R^{n\times n}$. Our argument will also apply to rectangular matrices, but we choose square matrices here for the ease of exposition. Depth-$\mu$P suggests initializing the hidden layers from $\mathcal{N}(0, 1/n)$, but setting the learning rate to be $\eta^\ell = \Theta(L^{\alpha-1}n^{-1})$. Thus we have</p>
+<p>$$||\,\bm{W}^\ell_0\,||=\Theta(1)\ne\Theta(L^{\alpha-1})=||\,\Delta \bm{W}_t^\ell\,||.$$</p>
+<p>In this case as $L\rightarrow \infty$, the weight updates are too small to learn meaningful features, our updates are no longer maximal! Note that we will still pass a coordinate check in this situation because of the failure case described by equation $(3)$ (see also the empirical coordinate check failures discussed below), further providing evidence for the superiority of the spectral perspective.</p>
+<p><strong>Spectral </strong>$\mu$<strong>P Prevents Lazy-Learning</strong></p>
+<p>The Complete-P depth parameterization is motivated by the following observation: even though feature learning is occurring in the sense of $(1)$, the model weights get “stuck” in the “lazy-regime”, severely harming performance. From the spectral $\mu$P perspective, it is clear why this is happening: with the sub-maximal updates we barely move away from the initialized weights.</p>
+<p>Roughly speaking, lazy-learning occurs for a layer $\bm{h}^\ell$ we have</p>
+<p>$$\frac{|\Delta_{\bm{W}}\bm{h}^\ell-\Delta_{\bm{W}}\bm{h}<em _bm_W="\bm{W">\ell^{\text{lin}, \bm{W}}|}{|\Delta</em>$$}}\bm{h}_\ell^{\text{lin}, \bm{W}}|}=o(1), \qquad \text{as}\quad N, L\rightarrow \infty, \tag{6</p>
+<p>where</p>
+<p>$$\Delta_{\bm{W}}\bm{h}<em _bm_W="\bm{W">\ell^{\text{lin}, \bm{W}}(\bm{W}; \bm{W}_0)=\bm{h}(\bm{W}_0)+ \langle\,\nabla</em>_0\,\rangle.$$}}\bm{h}(\bm{W})|_{\bm{W}=\bm{W}_0}\,|\,\bm{W}-\bm{W</p>
+<p>Under this framework we are saying that lazy-learning occurs if the linearization around the initial weights is a good approximation as we scale $N, L$. But this is precisely what spectral feature learning aims to prevent!</p>
+<p>Observe that by Taylor expansion we simply have</p>
+<p>$$\Delta_{\bm{W}}\bm{h}^\ell=\Delta_{\bm{W}}\bm{h}<em _bm_W="\bm{W">\ell^{\text{lin}, \bm{W}}+\frac{1}{2}\Delta\bm{W}^T\,\nabla</em>$$}}^2\bm{h}(\bm{W})\,\Delta\bm{W} + \text{L.O.T.</p>
+<p>in other words</p>
+<p>$$\frac{|\Delta_{\bm{W}}\bm{h}^\ell-\Delta_{\bm{W}}\bm{h}<em _bm_W="\bm{W">\ell^{\text{lin}, \bm{W}}|}{|\Delta</em>}}\bm{h<em _bm_W="\bm{W">\ell^{\text{lin}, \bm{W}}|}\approx\frac{|\Delta\bm{W}^T\,\nabla</em>.$$}}^2\bm{h}(\bm{W})\,\Delta\bm{W}|}{|\bm{h}(\bm{W}_0)|} \approx \frac{||\,\Delta \bm{W}\,||^2}{||\,\bm{W}\,||</p>
+<p>Note that if we enforce the spectral feature learning conditions $(2)$ then this term is never $o(1)$, but for depth-$\mu$P the right hand side decays like $L^{\alpha-1}=o(1)$ and thus exhibits lazy-learning whenever $\alpha\ne 1$.</p>
+<p>In summary, using spectral $\mu$P as the basis for our theory means that we do not need the additional Desiderata from the Complete-P paper to derive Complete-P, simplifying the theoretical analysis.</p>
+<p><strong>An ABC-Type Family of Depth Parameterizations</strong></p>
+<p>The failure of depth $\mu$P is caused by the weight updates being the wrong size for the initialization, but this leaves open the possibility of shrinking the initialization to match the size of the weight updates. Sample $\bm{W}_0^\ell \sim \mathcal{N}(0, (L^{\alpha - 1}\sqrt{n})^{-1})$ so that</p>
+<p>$$||\,\bm{W}_0^\ell\,||=\Theta(L^{\alpha-1})$$</p>
+<p>to match the weight updates. We now have</p>
+<p>$$||\,\sum_\ell L^{-\alpha}\bm{W}<em _ell="\ell">t^\ell\,||=L^{-\alpha}\Theta(\sum</em>_t^\ell\,||)=\Theta(1),$$}||\,\bm{W</p>
+<p>as desired. It remains to be seen whether or not this parameterization actually leads to feature learning and $\mu$-transfer in practice. There is reason to suspect it may not, chiefly that having the weights and weight updates shrinking so severely as we scale depth seems undesirable. We leave further theoretical and empirical investigations of this depth parameterization to future work.</p>
+<h3 id="muon">Muon</h3>
+<p>Muon is a recently introduced optimizer <a href="https://kellerjordan.github.io/posts/muon/">(Jordan et al. 2024)</a>which has shown promising results for training LLMs at scale <a href="https://arxiv.org/abs/2502.16982">(Liu et al. 2025)</a><a href="https://arxiv.org/abs/2507.20534">(Bai et al. 2025)</a>.</p>
+<p>The Muon update rule is given by</p>
+<p>$$\Delta \bm{W}<em t-1="t-1">t = -\eta\mathbf{O}(\bm{W}</em>),$$</p>
+<p>where $\bm{O}$ is the approximately orthogonalized gradient with respect to $\bm{W}<em t-1="t-1">{t-1}$, found using a Newton-Schultz iteration scheme <a href="https://kellerjordan.github.io/posts/muon/">(Jordan et al. 2024)</a>. From the perspective of spectral $\mu$P what we primarily care about is the size of the spectral norm of $\mathbf{O}(\bm{W}</em>)$, which is $\Theta(1)$ by construction <a href="https://jeremybernste.in/writing/deriving-muon">(Bernstein 2025)</a>. This implies that the learning rate for the hidden layers in a neural network using Muon should scale like $\eta = \Theta(1)$. Learning rate should transfer without having to adjust the initialization scheme or the learning rate (Assuming that we are using Adam under SP for the initialization and output layers).</p>
+<p>Muon is typically applied with decoupled weight decay and the full weight update rule</p>
+<p>$$\Delta\bm{W}<em t-1="t-1">t = -\lambda\eta\bm{W}</em>).$$}-\eta\mathbf{O}(\bm{W}_{t-1</p>
+<p>Note that our analysis from above continues to hold, except now that the learning rate is $\Theta(1)$ for hidden layers, the weight decay will also be $\Theta(1)$. Not only does Muon fix the learning rate scale, but it also fixes the weight decay scale when using decoupled weight decay.</p>
+<p><strong>Does Muon Kill </strong>$\mu$<strong>P</strong></p>
+<p>As authors and teams have demonstrated the effectiveness of using MuON at scale the usefulness of $\mu$P as a discipline have been called into question. However, we argue here that this may be a distinction without a difference, since the <strong>principles</strong> of $\mu$P remain relevant, even when one uses Muon.</p>
+<p>For example, Muon won’t transfer learning rate by default on GQA, and the reasons are the same as the reasons outlined in <a href="https://openreview.net/forum?id=UJB2uOS9MR">(Chickering et al. 2025)</a>. Namely that the spectral norm and the expected operator norm of the network computation do not agree. Thus, getting Muon to work in this setting requires the same fundamental understanding of the underlying behavior of the computation in the spectral norm. Whether or not doing this analysis constitutes “$\mu$P for Muon” is up for debate, and frankly the distinction is somewhat meaningless. Regardless, we believe that much in the same way students are encouraged to study SGD before moving on to studying Adam, so should practitioners be encouraged to understand $\mu$P prior to moving on to Muon.</p>
+<p>Finally, we note that as of this writing, efficient, large-scale, open-source Muon implementations are lacking. Because of this there may be a period of time where Adam continues to be the preferred method of training models. Furthermore, the practical benefits of large-scale training with Muon are not fully understood. It may be the case that the benefits of training with Muon vanish for very large training runs <a href="https://arxiv.org/pdf/2509.02046">(Wen et al. 2025)</a>. It is challenging to ablate a large-scale LLM training run, which makes committing to using Muon challenging. However, we stress that an understanding of the strengths and weaknesses of Muon is currently lacking, but we will likely understand this optimizer better in the coming months and years.</p>
+<h1 id="the-implied-dynamics-of-mup">The Implied Dynamics of $\mu$P</h1>
+<p>We pause to consider the implications of <strong>not</strong> using $\mu$P. In particular we argue that we should understand this situation as representing different layers learning at the incorrect rate. We also argue why we see the standard-parameterization scaling heuristics that we do.</p>
+<p>Given that most neural network training already initializes the weights using Kaiming-He, which is correct from the perspective of both standard and spectral $\mu$P, the deficiency in using the standard parameterization must be understood exclusively throughout the weight update scalings. We consider the common case of the Adam optimizer and can then understand the issues with the standard parameterization by considering the proposed $\mu$P modification to the learning rates which derived above in $(4)$.</p>
+<p>These scalings imply that during training with the standard parameterization, the embedding layer will be learning $n$ times slower than the hidden layers and unembedding layers (this is complicated by weight tying, which we ignore in this blog). Assuming that we tune the training to find an optimal learning rate, we expect to find an empirical law $\eta \sim 1/n$, since the majority of layers in a network are hidden layers, which naturally prefer this scaling. However, training at this reduced learning rate will severely degrade the rate at which the embedding layers are updating, leading to the majority of training taking place with essentially frozen and essentially random embedding weights!</p>
+<p>This is a potential cause of issues during pre-training, especially as the model sizes get large: the embedding layer is essentially frozen at it’s random initialization, and the model does not learn embedding features quickly enough to send meaningful signal to the lowest layers attention blocks. Worse, the embedding component of the transformer loss contributes noise to the gradient, slowing down the rate at which we can train models at all. As we decrease the learning rate further to compensate for this discrepancy, we exacerbate the frozen input weights, leading to a situation where the model’s capacity is reduced. This is why in the TP-V paper we see improved loss when using $\mu$P instead of SP for the largest models: as $n\rightarrow \infty$ in SP, the embedding weights become frozen to their random initialized weights, effectively reducing the model capacity. $\mu$P allows us to fully utilize the model’s capacity during training.</p>
+<h1 id="transferring-across-weight-decay-learning-rate-and-batch-size">Transferring Across Weight Decay, Learning Rate, and Batch Size</h1>
+<p>The original TP5 paper <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a>suggests that we should not expect learning rate transfer across weight decay or batch size. While we do not offer a conclusive rebuttal to this assertion, but we consider some more recent work which has made strides in articulating the problem more thoroughly.</p>
+<p>We follow a line of work originating with <a href="https://arxiv.org/abs/2405.13698">(Wang &amp; Aitchison 2024)</a> and explored in more depth by <a href="https://arxiv.org/abs/2505.13738">(Bergsma et al. 2025)</a>. In particular, Wang &amp; Aitchison suggest that weight decay and learning rate should be related through the quantity $\tau_{\text{ema}}$</p>
+<p>$$\tau_{\text{ema}}:=\frac{B}{\lambda\eta D},$$</p>
+<p>where $B$ is the batch size and $D$ is the dataset size. They suggest that this quantity should transfer across model training (implicitly this transfer is understood only to occur at the optimal learning rate) and this suggestion is based off of a discrete dynamics argument focused on the the change in the weights induced by the total integrated weight decay during training.</p>
+<p>We emphasize an important point which we feel is not sufficiently stated in the existing literature: we should only expect that $\tau_{\text{ema}}$ is transferable <strong>at the optimal learning rate</strong>. The reason should be clear: for a fixed dataset and batch size there are two limiting cases for the weight decay and learning rate. In the first case, $\lambda\rightarrow \infty$ as $\eta\rightarrow 0$, learning will not happen since the learning dynamics will be governed purely by the exponential decay of the weights. In the other limiting case, $\lambda\rightarrow 0$ and $\eta\rightarrow \infty$, in which case the dynamics will be too unstable to meaningfully discuss training.</p>
+<p>In the figure below we demonstrate that properly scaled decoupled weight decay and $\tau_{\text{ema}}$ both exhibit transferability when maintaining a constant TPP and using an empirical $B\propto D^{0.5}$ scaling law for batch size (see Figures below).</p>
+<p><img alt="voronoi.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/voronoi.png" /></p>
+<p><img alt="voronoi_tau.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/voronoi_tau.png" /></p>
+<p>Finally we argue that for a fixed maximum model size we can transfer learning rate across batch size and model size using $\mu$P so long as the batch size is sufficiently large and we allow ourselves to scale the dataset size. I.e. we are in the infinite data regime.</p>
+<p>The figure below shows the relationship between loss, learning rate, and batch size in the constant TPP (constant data) and constant iterations (infinite data) regimes.</p>
+<p><img alt="batch_size_response_with_optimal_lr_curve.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/batch_size_response_with_optimal_lr_curve.png" /></p>
+<p>The infinite data regime is obviously unrealistic for any practical training, but it offers us an ablative setting for small model experimentation with architectural considerations like $\mu$P. To test modifications to $\mu$P we can use a sufficiently large batch size to isolate the effects of the model architecture, compared to the effects of the substrate (dataset and batch size). Once we are sure that our $\mu$P implementation is working as we expect we can move on to finding and tuning in the compute optimal setting.</p>
+<h1 id="some-pitfalls-of-coordinate-checking">Some Pitfalls of Coordinate Checking</h1>
+<p>In this section we summarize some of the pitfalls we have encountered when performing coordinate checking. Before moving forward we discuss some intuitions for practitioners new to coordinate checking. Below we plot a “clean” coordinate check, and note that the coordinates appear stable as we scale model size, with the weights themselves (top row) showing lower variance than the weight updates (bottom row). The first figure shows a standard coordinate check on the activations.</p>
+<p><img alt="passing_coord_check.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/passing_coord_check.png" /></p>
+<p>A general intuition is that the $\Delta \bm{h}_t$ updates appear to deviate from the “flat” as training progresses, while the spectral $\Delta\bm{W}_t$ coordinate checks get more stable as training progresses. This is easily understood as a consequence of the fact that $\Delta \bm{h}_t$ is a sum of two products (see above) and as such does not directly measure the weight updates.</p>
+<p><img alt="coord_check_weights.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/coord_check_weights.png" /></p>
+<h2 id="a-failure-case-sub-maximal-interior-layer-weight-updates">A Failure Case: Sub-Maximal Interior Layer Weight Updates</h2>
+<p>Building off the computations from the previous section on spectral $\mu$P, we show that the failure case described above, namely the weight updates of an interior hidden layer being too small, will not show up in a <a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a>-style coordinate check.</p>
+<p>To be more specific, since we can write</p>
+<p>$$\Delta (\bm{W}\bm{h})_t = \Delta \bm{W}_t\bm{h}_t + \bm{W}_t\Delta\bm{h}_t,$$</p>
+<p>both terms will contribute to the output size. Since our recursion assumes that both $\bm{h}_t$ and $\Delta \bm{h}_t$ are the correct size, this means that if we set the weight updates to zero, i.e. $\Delta \bm{W}_t=0$, then we have $\Delta(\bm{W}\bm{h})_t = \bm{W}_0\Delta \bm{h}_t$, but this is actually <strong>correct</strong> in norm, since</p>
+<p>$$||\,\Delta(\bm{W}\bm{h})_t\,||_2 = \Theta(||\,\bm{W}_0\,||\,||\,\Delta \bm{h}_t\,||)=\Theta(\sqrt{n}).$$</p>
+<p>The layer is passing coordinate checks, but the layer is constant, there is no learning going on, and this represents a bug in our implementation.</p>
+<p>The following figure demonstrates the issue. We run a coordinate check on a GPT-2 style LLM, using a $\mu$P implementation with the hidden layer learning rate set to zero. Thus, the hidden layer weights are constant $\bm{W}_t = \bm{W}_0$. Despite this, our model has a (mostly) clean coordinate check.</p>
+<p><img alt="failing_coord_check.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/failing_coord_check.png" /></p>
+<p>If we follow the suggestions of TP-V, then we would conclude that this implementation is correct. However, our implementation does <strong>not</strong> pass the more stringent spectral coordinate checks which we advocate for. Below is the spectral coordinate check for the same model where we can clearly see that no learning is occurring.</p>
+<p>The following figures are taken from our recent paper <a href="https://openreview.net/forum?id=UJB2uOS9MR">(Chickering et al. 2025)</a>. When applying $\mu$P to grouped-query attention (GQA), one finds that the naïve approach passes a standard coordinate check (first figure), but fails a spectral coordinate check (second figure) and will not produce robust learning rate transfer. We addressed this issue by performing the analysis in the spectral norm rather than the activation 2-norm. This particular failure case further highlights the “correctness” of the spectral perspective.</p>
+<p><img alt="Screen_Shot_2026-02-15_at_11.38.27_AM.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/Screen_Shot_2026-02-15_at_11.38.27_AM.png" /></p>
+<p><img alt="Screen_Shot_2026-02-15_at_11.38.42_AM.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/Screen_Shot_2026-02-15_at_11.38.42_AM.png" /></p>
+<h2 id="a-failure-case-non-power-law-scalings-power-laws-with-questionable-exponents">A Failure Case: Non-Power Law Scalings &amp; Power Laws with Questionable Exponents</h2>
+<p>In the course of our experiments we encountered a second subtle case of failing coordinate checks. This case involves a coordinate check with a non-power law scaling and usually indicates that there is a subtle implementation bug somewhere in the system. Concretely we can force this bug to show up in two places (1) when using the Adam optimizer with the $\varepsilon$ parameter set to be too large, and (2) when looking at a mixture-of-experts router with a poorly tuned load balancing loss.</p>
+<p>The following figure shows a coordinate check where the hidden layers are being sub-maximally updated due to the Adam $\varepsilon$ parameter being set too high. In this case the updates behave roughly like the first moment, which decays as the hidden size increases according to Heuristic 1. The decay in weight updates leads to a shift in learning rate during $\mu$-transfer.</p>
+<p><img alt="failing_coord_check_adam.png" src="/static/images/blog/the-spectral-maximal-update-parameterization-in-theory-and-practice/failing_coord_check_adam.png" /></p>
+<h1 id="conclusions">Conclusions</h1>
+<p>If we can leave the reader with a single takeaway it is that for any large-scale training runs teams should use some combination of $\mu$P and Muon to ensure that all of the layers are training at the “correct” rate. Beyond that, when working with $\mu$P implementations one should favor a spectral norm perspective to an activation norm perspective to avoid some subtle pitfalls that can occur when working with $\mu$P.</p>
+<h1 id="references">References</h1>
+<ol>
+<li>
+<p><a href="https://projecteuclid.org/journals/annals-of-probability/volume-21/issue-3/Limit-of-the-Smallest-Eigenvalue-of-a-Large-Dimensional-Sample/10.1214/aop/1176989118.full">(Bai &amp; Yin 1993)</a><br />
+Bai, Z. D., Yin, Y. Q. <strong>Limit of the Smallest Eigenvalue of a Large Dimensional Sample Covariance Matrix</strong>. Ann. Probab. 1993.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2507.20534">(Bai et al. 2025)</a><br />
+Kimi Team. <strong>Kimi K2: Open Agentic Intelligence</strong>. arXiv. 2025.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2505.13738">(Bergsma et al. 2025)</a><br />
+Bergsma, S., Dey, N., Gosal, G., Gray, G., Soboleva, D., Hestness, J. <strong>Power Lines: Scaling Laws for Weight Decay and Batch Size in LLM Pre-training</strong>. NeurIPS (to appear). 2026.</p>
+</li>
+<li>
+<p><a href="https://jeremybernste.in/writing/deriving-muon">(Bernstein 2025)</a><br />
+Bernstein, J. <strong>Deriving Muon</strong>. 2025.</p>
+</li>
+<li>
+<p><a href="https://openreview.net/forum?id=UJB2uOS9MR">(Chickering et al. 2025)</a><br />
+Chickering, K. R., Wang, H., Wu, M., Moreno, A., Chen, M., Ma, X., Soboleva, D., Hestness, J., Liu, Z., Xing, E. P. <strong>GQA-</strong>$\mu$<strong>P: Maximal Update Parameterizations for Grouped Query Attention. </strong>Submitted. 2025.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2304.03208">(Dey et al. 2023)</a><br />
+Dey, N., Gosal, G., Chen, Z., Khachane, H., Marshall, W., Pathria, R., Tom, M., Hestness, J. <strong>Cerebras-GPT: Open Compute-Optimal Language Models Trained on the Cerebras Wafer-Scale Cluster</strong>. arXiv. 2023.</p>
+</li>
+<li>
+<p><a href="https://www.cerebras.ai/blog/the-practitioners-guide-to-the-maximal-update-parameterization">(Dey et al. 2024)</a><br />
+Dey, N., Anthony, Q., Hestness, J. <strong>The Practitioner’s guide to the maximal update parameterization</strong>. Cerebras Blog. 2024.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2505.01618">(Dey et al. 2025)</a><br />
+Dey, N., Zhang, B. C., Noci, L., Li, M., Bordelon, B., Bergsma, S., Pehlevan, C., Hanin, B., Hestness, J. <strong>Don’t be lazy: CompleteP enables compute-efficient deep transformers</strong>. NeurIPS. 2025.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2407.05872">(Everett et al. 2024)</a><br />
+Everett, K., Xiao, L., Wortsman, M., Alemi, A. A., Novak, R., Liu, P. J., Gur, I., Sohl-Dickstein, J., Kaelbling, L. P., Lee, J., Pennington, J. <strong>Scaling Exponents Across Parameterizations and Optimizers</strong>. arXiv. 2024.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2511.01734">(Hayou 2025)</a><br />
+Hayou, S. <strong>A Proof of Learning Rate Transfer Under </strong>$\mu$<strong>P</strong>. arXiv. 2025.</p>
+</li>
+<li>
+<p><a href="https://kellerjordan.github.io/posts/muon/">(Jordan et al. 2024)</a><br />
+Jordan, K., Jin, Y., Boza, V., You, J., Cesista, F., Newhouse, L., Bernstein, J. <strong>Muon: An optimizer for hidden layers in neural networks</strong>. Keller Jordan Blog. 2024.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/1412.6980">(Kingma &amp; Ba 2014)</a><br />
+Kingma, P. D., Ba, J. <strong>Adam: A Method for Stochastic Optimization</strong>. arXiv. 2014.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2502.16982">(Liu et al. 2025)</a><br />
+Jingyuan Liu, Jianlin Su, Xingcheng Yao, Zhejun Jiang, Guokun Lai, Yulun Du, Yidao Qin, Weixin Xu, Enzhe Lu, Junjie Yan, Yanru Chen, Huabin Zheng, Yibo Liu, Shaowei Liu, Bohong Yin, Weiran He, Han Zhu, Yuzhi Wang, Jianzhou Wang, Mengnan Dong, Zheng Zhang, Yongsheng Kang, Hao Zhang, Xinran Xu, Yutao Zhang, Yuxin Wu, Xinyu Zhou, Zhilin Yang. <strong>Muon is Scalable for LLM Training</strong>. arXiv. 2025.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/1711.05101">(Loshchilov &amp; Hutter 2017)</a><br />
+Loshchilov, I., Hutter, F. <strong>Decoupled Weight Decay Regularization</strong>. arXiv. 2017.</p>
+</li>
+<li>
+<p><a href="https://terrytao.wordpress.com/wp-content/uploads/2011/08/matrix-book.pdf">(Tao 2012)</a><br />
+Tao, T. <strong>Topics in Random Matrix Theory</strong>. AMS GSM. 2012.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2405.13698">(Wang &amp; Aitchison 2024)</a><br />
+Wang, X., Aitchison, L. <strong>How to set AdamW’s weight decay as you scale model and dataset size</strong>. arXiv. 2024.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/pdf/2509.02046">(Wen et al. 2025)</a><br />
+Wen, K., Hall, D., Ma, T., Liang, P. Fantastic Pretraining Optimizers and Where to Find Them. arXiv. 2025.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/1910.12478">(Yang 2019)</a><br />
+Yang G. Tensor Programs I: Wide Feedforward or Recurrent Neural Networks of Any Architecture are Gaussian Processes. arXiv. 2019.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2006.14548">(Yang 2020a)</a><br />
+Yang G. <strong>Tensor Programs II: Neural Tangent Kernel for Any Architecture</strong>. arXiv. 2020.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2009.10685">(Yang 2020b)</a><br />
+Yang, G. <strong>Tensor Programs III: Neural Matrix Laws</strong>. arXiv. 2020.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2011.14522">(Yang &amp; Hu 2020)</a><br />
+Yang, G., Hu, E. <strong>Feature Learning In Infinite-Width Neural Networks</strong>. arXiv. 2020.</p>
+</li>
+<li>
+<p><a href="https://www.notion.so/Mixture-of-Experts-Learnings-288ad6190c8180ada65bfcde15d7bae6?pvs=21">(Yang et al. 2022)</a><br />
+Yang, G., Hu, E. J., Babuschkin, I., Sidor, S., Liu, X., Farhi, D., Ryder, N., Pachocki, J., Chen, W., Gao, J. <strong>Tensor Programs V: Tuning Large Neural Networks via Zero-Shot Hyperparameter Transfer</strong>.****arXiv. 2022.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2310.02244">(Yang et al. 2023a)</a><br />
+Yang, G., Yu, D., Zhu, C., Hayou, S.<strong> Tensor Programs VI: Feature Learning in Infinite-Depth Neural Networks</strong>. arXiv. 2023.</p>
+</li>
+<li>
+<p><a href="https://arxiv.org/abs/2310.17813">(Yang et al. 2023b)</a><br />
+Yang, G., Simon, J. B., Bernstein, J. <strong>A Spectral Condition for Feature Learning</strong>. arXiv. 2023.</p>
+</li>
+<li>
+<p><a href="https://link.springer.com/article/10.1007/BF00353874#citeas">(Yin et al. 1988)</a><br />
+Yin, Y. Q., Bai, Z. D., Krishnaiah, P. R. <strong>On the limit of the largest eigenvalue of the large dimensional sample covariance matrix</strong>. Probability Theory and Related Fields. 1988.</p>
+</li>
+</ol>
+<h1 id="citation">Citation</h1>
+<pre><code class="language-shell">@misc{chickering2025mup,
+    author={Kyle R. Chickering},
+    title={The Spectral Maximal Update Parameterization in Theory and Practice},
+    year={2025},
+    url={},
+    publisher={Kyle Chickering's Blog}
+}
+</code></pre>
+</article>
+
+        <footer>
+            &copy; Kyle R. Chickering
+        </footer>
+    </div>
+    <script src="../../static/js/theme-toggle.js"></script>
+    
+</body>
+</html>

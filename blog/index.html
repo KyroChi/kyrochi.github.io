@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Blog - Kyle R. Chickering</title>
+    <link rel="stylesheet" href="../static/css/main.css">
+    <link rel="stylesheet" href="../static/css/synthwave.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false}
+    ]});"></script>
+    <script>
+        // Apply theme immediately to prevent flash of unstyled content
+        if (localStorage.getItem('synthwave-theme') === 'on') {
+            document.documentElement.classList.add('synthwave');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a class="site-title" href="../index.html">Kyle R. Chickering</a>
+            <div class="nav-links">
+                <a href="../index.html">Home</a>
+                <a href="../blog/index.html">Blog</a>
+                <button id="theme-toggle" class="theme-toggle">Synthwave</button>
+            </div>
+        </nav>
+        <h1>Blog Posts</h1>
+<ul class="blog-list">
+<li><a class="post-title" href="the-spectral-maximal-update-parameterization-in-theory-and-practice/index.html"><span class="post-icon">🛩️</span>The Spectral Maximal Update Parameterization in Theory and Practice</a><span class="post-date">December 2025</span></li>
+<li><a class="post-title" href="accelerating-pinn-experiments-with-tangentprop/index.html"><span class="post-icon">🛠️</span>Accelerating PINN Experiments with n-TangentProp</a><span class="post-date">January 2025</span><div class="post-description">Standard autodiff produces exponentially large computational graphs for high-order derivatives. n-TangentProp exploits the recursive structure of neural networks and Faà di Bruno's formula to compute nth-order derivatives in a single forward pass, yielding 24x–65x speedups for PINN training.</div></li>
+<li><a class="post-title" href="why-you-cannot-divide-by-zero/index.html"><span class="post-icon">0️⃣</span>Why You Cannot Divide by Zero</a><span class="post-date">January 2025</span></li>
+<li><a class="post-title" href="an-exact-over-compressive-shock-solution-for-the-brio-hunter-equations/index.html"><span class="post-icon">🧲</span>An Exact, Over-Compressive Shock Solution for the Brio-Hunter Equations</a><span class="post-date">August 2024</span><div class="post-description">We construct an explicit over-compressive shock solution to the Brio-Hunter-Freistuhler system — a non-strictly hyperbolic conservation law — by decoupling through Riemann invariants and solving the resulting Burgers equation exactly.</div></li>
+<li><a class="post-title" href="temporal-sequence-recognition-with-rnns/index.html"><span class="post-icon">🪜</span>Temporal Sequence Recognition with RNNs</a><span class="post-date">March 10, 2023</span></li>
+<li><a class="post-title" href="should-you-multithread-an-experiment-driven-approach/index.html"><span class="post-icon">🧶</span>Should You Multithread? An Experiment-Driven Approach</a><span class="post-date">November 7, 2022</span><div class="post-description">Spawning threads has overhead. We implement matrix multiplication in C, measure pthread creation cost, derive a closed-form break-even condition, and build a smart multiplier that chooses the faster path automatically.</div></li>
+<li><a class="post-title" href="binance-ohlc-1m-dataset/index.html"><span class="post-icon">📈</span>Binance OHLC 1m Dataset</a><span class="post-date">September 2022</span></li>
+<li><a class="post-title" href="solution-of-a-certain-nonlocal-ode-by-reduction-to-a-riemann-hilbert-problem/index.html"><span class="post-icon">⛪</span>Solution of a Certain Nonlocal ODE by Reduction to a Riemann-Hilbert Problem</a><span class="post-date">April 2021</span></li>
+<li><a class="post-title" href="measure-theory-lebesgue-integration-and-spaces/index.html"><span class="post-icon">📏</span>Measure Theory, Lebesgue Integration and $L^p$ Spaces</a><span class="post-date">April 19, 2019</span></li>
+<li><a class="post-title" href="current-state-of-artificial-neural-networks/index.html"><span class="post-icon">🧠</span>Current State of Artificial Neural Networks</a><span class="post-date">March 2016</span></li>
+</ul>
+
+        <footer>
+            &copy; Kyle R. Chickering
+        </footer>
+    </div>
+    <script src="../static/js/theme-toggle.js"></script>
+    
+</body>
+</html>

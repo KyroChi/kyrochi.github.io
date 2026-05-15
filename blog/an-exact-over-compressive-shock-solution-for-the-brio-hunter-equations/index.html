@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath:  [['$', '$']],
+        displayMath: [['$$', '$$']],
+        tags: 'ams',
+      },
+      svg: { fontCache: 'global' },
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script src="https://distill.pub/template.v2.js"></script>
+  <style>
+    .back-link {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.85rem;
+      color: #666;
+      text-decoration: none;
+    }
+    .back-link:hover { color: #222; }
+  </style>
+</head>
+<body>
+
+<d-front-matter>
+  <script id="distill-front-matter" type="text/json">{
+    "title": "An Exact, Over-Compressive Shock Solution for the Brio-Hunter Equations",
+    "description": "We construct an explicit over-compressive shock solution to the Brio-Hunter-Freistuhler system — a non-strictly hyperbolic conservation law — by decoupling through Riemann invariants and solving the resulting Burgers equation exactly.",
+    "date": "August 2024",
+    "publishedDate": "2024-08-01",
+    "icon": "🧲",
+    "authors": [
+      {
+        "author": "Kyle R. Chickering",
+        "authorURL": "https://kyrochi.github.io",
+        "affiliations": [{"name": "UC Davis"}]
+      }
+    ]
+  }</script>
+</d-front-matter>
+
+<d-title>
+  <h1>An Exact, Over-Compressive Shock Solution for the Brio-Hunter Equations</h1>
+</d-title>
+
+<d-byline></d-byline>
+
+<d-abstract>
+  <p>
+    We construct an explicit, non-trivial, over-compressive shock solution to the
+    Brio-Hunter-Freistuhler (BHF) system — a non-strictly hyperbolic conservation law.
+    By decoupling through Riemann invariants and solving the resulting Burgers equation
+    with piecewise-linear initial data, we determine the solution and all characteristics
+    in closed form. To our knowledge this is the only known non-trivial exact solution
+    exhibiting over-compressive shock formation for this system.
+  </p>
+</d-abstract>
+
+<d-article>
+
+  <p><a class="back-link" href="../index.html">← Back to blog</a></p>
+
+  <p>
+    This post summarizes work from a project that will not be published but that I thought
+    was neat. To my knowledge this is the only known exact and non-trivial over-compressive
+    shock. Enjoy!
+  </p>
+
+  <h2>Introduction</h2>
+
+  <p>
+    We study the shock-formation problem for the Brio-Hunter-Freistuhler (BHF) equation
+  </p>
+
+$$\begin{align*}
+  \partial_t \boldsymbol{u} + \partial_x(|\boldsymbol{u}|^2\boldsymbol{u}) &= 0, \\
+  \boldsymbol{u}(x, 0) &= \boldsymbol{u}_0(x),
+\end{align*}\tag{1.1}$$
+
+  <p>
+    for $\boldsymbol{u}:\mathbb{R}\rightarrow\mathbb{R}^2$ with given Cauchy data $\boldsymbol{u}_0$.
+  </p>
+
+  <p>
+    Let $\boldsymbol{u}=(u,v)$ be the solution to (1.1) with associated fast and slow
+    characteristics $\eta$ and $\psi$. Let the solution develop a gradient blowup,
+    i.e. pre-shock, at the space-time location $(x_*, T_*)$.
+  </p>
+
+  <ul>
+    <li>
+      We say the pre-shock is <strong>Lax-type</strong> if $\eta_x(x_*, T_*)=0$ and
+      $0 &lt; \psi_x(x_*, T_*)\leqslant 1$.
+    </li>
+    <li>
+      We say the pre-shock is <strong>over-compressive</strong> if
+      $\eta_x(x_*, T_*)=\psi_x(x_*, T_*)=0$.
+    </li>
+    <li>
+      We say the pre-shock is <strong>under-compressive</strong> if
+      $\eta_x(x_*, T_*)=0$ and $\psi_x(x_*, T_*) &gt; 1$.
+    </li>
+  </ul>
+
+  <p>
+    By writing $\boldsymbol{u}=(u, v)$, we can re-write the BHF equation (1.1) as
+  </p>
+
+$$\begin{align*}
+  \partial_t u + (3u^2 + v^2)\partial_y u + 2uv\,\partial_x v &= 0, \\
+  \partial_t v + (3v^2 + u^2)\partial_y v + 2uv\,\partial_x u &= 0.
+\end{align*}\tag{1.2}$$
+
+  <p>
+    Computing the eigenvalues of this system yields the wave-speeds
+  </p>
+
+$$\lambda_1 = u^2 + v^2, \qquad \lambda_2 = 3(u^2 + v^2) = 3\lambda_1.$$
+
+  <p>
+    The non-strict hyperbolicity is immediately apparent as these wave-speeds coincide at
+    points where $u$ and $v$ vanish. An attempt to study this equation along Riemann
+    invariants will fail, since the Riemann invariants are given by
+  </p>
+
+$$a = u^2 + v^2, \qquad b = 0, \tag{1.3}$$
+
+  <p>
+    one of which is trivial. The non-trivial Riemann invariant is still useful for the
+    analysis, and we can replace the equation for $u$ by the equation for $a$ to decouple
+    the $a$ dynamics from the $v$ dynamics. This leads to the equivalent system
+  </p>
+
+$$\begin{align*}
+  \partial_t a + 3a\,\partial_y a &= 0, \tag{1.4a} \\
+  \partial_t v + a\,\partial_y v + v\,\partial_y a &= 0. \tag{1.4b}
+\end{align*}$$
+
+  <p>
+    In this new system $\lambda_1 = a$, $\lambda_2 = 3a$. Equation (1.4a) is a
+    time-rescaled Burgers equation which does not depend on $v$, and equation (1.4b) is a
+    passive transport equation with drift $a$.
+  </p>
+
+  <p>
+    Observe that $a=0$ is a stationary point of Burgers equation (1.4a). Thus we can
+    recover $u(x, t)$ by the formula
+  </p>
+
+$$u(x, t) = \operatorname{sign}(u_0(x))\sqrt{a(x, t) - v^2(x, t)}.$$
+
+  <p>
+    We choose to study the system (1.4) in Lagrangian coordinates. Let $\eta$ and $\psi$
+    be the fast and slow characteristics respectively, satisfying the ODEs
+  </p>
+
+$$\begin{align*}
+  \partial_t \eta(x, t) &= \lambda_2(x, t) = 3a(\eta(x, t), t), \tag{1.5a} \\
+  \partial_t \psi(x, t) &= \lambda_1(x, t) = a(\psi(x, t), t). \tag{1.5b}
+\end{align*}$$
+
+  <p>
+    Define $A = a(\eta(x, t), t)$ and $V = v(\psi(x, t), t)$. Differentiating these
+    quantities in time gives the evolution equations along the fast and slow characteristics
+  </p>
+
+$$\begin{align*}
+  \partial_t A &= 0, \tag{1.6a} \\
+  \partial_t V + V(\partial_y a)(\psi(x, t), t) &= 0. \tag{1.6b}
+\end{align*}$$
+
+  <p>
+    Since $A$ remains constant we can re-write (1.5a) as $\partial_t \eta = 3a_0(x)$
+    and immediately obtain the exact solution
+  </p>
+
+$$\eta(x, t) = x + 3a_0(x)\,t. \tag{1.7}$$
+
+  <p>
+    We now turn to the slow characteristics $\psi$. Solving (1.5b) gives
+  </p>
+
+$$\psi(x, t) = x + \int_{0}^t a(\psi(x, t'), t')\,dt'. \tag{1.8}$$
+
+  <p>
+    If $a$ is piecewise $C^1$, then
+  </p>
+
+$$\psi_x(x, t) = 1 + \int_{0}^t (a_y)(\psi(x, t'), t')\,\psi_x(x, t')\,dt',$$
+
+  <p>
+    which is an integral equation for $\psi_x$ with solution
+  </p>
+
+$$\psi_x(x, t) = \exp\!\left(\int_{0}^t (a_y)(\psi(x, t'), t')\,dt'\right). \tag{1.9}$$
+
+  <p>
+    Finally, observe that along the slow characteristics $\psi$, the solution to the ODE
+    (1.6b) is given by
+  </p>
+
+$$\begin{align*}
+  V(x, t) &= v_0(x)\exp\!\left(\int_{0}^t (a_y)(\psi(x, t'), t')\,dt'\right) \\
+           &= v_0(x)\,\psi_x^{-1}(x, t).
+\end{align*}$$
+
+  <h2>An Exact, Over-Compressive Solution to (1.4)</h2>
+
+  <p>
+    We choose initial data so that the following conditions are satisfied
+  </p>
+
+$$a_0(0)=0, \qquad \lim_{x\rightarrow 0^{-}}a_0'(x) = \inf_{x &lt; 0} a_0'(x) &gt; -\infty, \qquad a_0'(x) &gt; 0 \;\text{for all}\; x &lt; 0. \tag{2.1}$$
+
+  <p>
+    These conditions ensure that there is a unique blowup label occurring at the origin, and
+    at this blowup label the system must undergo non-strictly hyperbolic dynamics.
+  </p>
+
+  <p>
+    These conditions can only be satisfied if $a_0(x) = \mathcal{O}(|x|)$ near $x=0$.
+    Let $\gamma &gt; 0$. Observe that if this condition were not true, then either one of
+    the two things must be true, either $a_0(x) = \mathcal{O}(|x|^{1-\gamma})$ or
+    $a_0(x)=\mathcal{O}(|x|^{1+\gamma})$. In the first case we must have
+    $\gamma \leqslant 1$, and
+    $a_0'(x) = \mathcal{O}(|x|^{-\gamma}\operatorname{sign}(x))$. Now we have
+    $\lim_{x\rightarrow 0^{-}}a_0'(0) = -\infty$ and the solution will instantaneously form
+    a shock (i.e. we will be doing shock development instead of shock formation). In the
+    second case $a_0'(x) = \mathcal{O}(|x|^\gamma)$ and it is clear that
+    $\lim_{x\rightarrow 0^{-}}a_0'(0)$ is not the global infimum.
+  </p>
+
+  <p>
+    Since $a_0(x) = \mathcal{O}(|x|)$, it follows that $u_0, v_0 = \mathcal{O}(|x|^{1/2})$
+    near the origin, so that for the purposes of over-compressive shock formation the initial
+    data must lie in $C^{1/2}(\mathbb{R})$.
+  </p>
+
+  <p>
+    We solve (1.4) exactly to build intuition about the mechanisms leading to over-compressive
+    shock formation for this system. We choose any initial data $u_0, v_0$ such that
+    $a_0 := u_0^2 + v_0^2$ satisfies
+  </p>
+
+$$\begin{align*}
+  a_0 = \begin{cases}
+    1, \qquad &x\leqslant -1, \\
+    -x, \qquad &-1 &lt; x &lt; 0, \\
+    0, \qquad &0 \leqslant x
+  \end{cases}.
+\end{align*}\tag{2.2}$$
+
+  <p>
+    It is easy to check that the unique solution to Burgers equation (1.4a) is then given by
+  </p>
+
+$$\begin{align*}
+  a(x, t) = \begin{cases}
+    1, \qquad &x \leqslant -3\!\left(\frac{1}{3}-t\right), \\
+    -\dfrac{x}{3\!\left(\frac{1}{3}-t\right)}, \qquad &-3\!\left(\frac{1}{3}-t\right) &lt; x &lt; 0, \\
+    0, \qquad &0 \leqslant x
+  \end{cases}.
+\end{align*}\tag{2.3}$$
+
+  <p>
+    The fast characteristics can easily be computed from (1.7) and are given by
+  </p>
+
+$$\begin{align*}
+  \eta(x, t) = \begin{cases}
+    x + 3t, \qquad &x \leqslant -1, \\
+    x(1-3t), \qquad &-1 &lt; x &lt; 0, \\
+    x, \qquad &0 \leqslant x
+  \end{cases}.
+\end{align*}$$
+
+  <p>
+    With these computations in hand we can now exactly solve ODE (1.5b) governing $\psi$
+    and thus completely determine $V$.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/an-exact-over-compressive-shock-solution-for-the-brio-hunter-equations/BH_psi.png"
+         alt="Slow characteristics ψ" style="width:100%;">
+    <figcaption>
+      <strong>Figure 1.</strong>
+      The characteristics $\psi$ for the exact solution (2.3). The blue line is
+      $x=-(T_*-t)$, the red line is $x=-3(T_*-t)$, and the black line is $x=0$.
+      Trajectories from the left of the blue line can never cross it; trajectories starting
+      below the red line always enter the region between the red and blue lines and cannot
+      leave. The black line is the shock, and to the right of the shock the fluid is always
+      quiescent. Trajectories arc until they hit the red line whereupon they propagate
+      linearly. The dotted blue, green, and black lines are the trajectories $\psi$
+      corresponding to, respectively, $x_0 &lt; -1$, $-1 &lt; x_0 &lt; 0$, $0 &lt; x_0$.
+      The compression of $\psi$ is visible in that the dotted green trajectories get
+      increasingly close as we move towards $t=\frac{1}{3}$ from above along the shock.
+    </figcaption>
+  </figure>
+
+  <p>
+    For any $x &lt; -1$, it should be obvious that from (2.3), $\psi(x, t) = x+t$.
+    Similarly for any $x &gt; 0$ we have that $\psi(x, t)= x$. The only difficulty is
+    for when $-1 &lt; x &lt; 0$. The solution we will construct can be understood more
+    easily by studying Figure 1. For $-1 &lt; x &lt; 0$, trajectories start off evolving
+    according to
+  </p>
+
+$$\partial_t \psi = -\frac{\psi}{3\!\left(\frac{1}{3}-t\right)},$$
+
+  <p>
+    but collide with the line $x=-3\!\left(\frac{1}{3}-t\right)$ at the finite time
+  </p>
+
+$$t^\flat(x) := \frac{1}{3} - \frac{1}{3}|x|^{3/2}$$
+
+  <p>and location</p>
+
+$$x^\flat(x) := -|x|^{3/2},$$
+
+  <p>
+    at which point they satisfy the ODE $\partial_t \psi = 1$ until they hit the shock at
+    $x=0$. Thus we arrive at the solution
+  </p>
+
+$$\psi(x, t) = \begin{cases}
+  x + t, \qquad &x \leqslant -1, \\
+  x\!\left(\dfrac{\frac{1}{3}-t}{\frac{1}{3}}\right)^{\!\!1/3},
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\; t &lt; t^\flat(x), \\
+  t-t^\flat(x)+x^\flat(x),
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\; t \geqslant t^\flat(x), \\
+  x, \qquad &0 \leqslant x.
+\end{cases}$$
+
+  <figure>
+    <img src="../../static/images/blog/an-exact-over-compressive-shock-solution-for-the-brio-hunter-equations/exact_BH_solution.png"
+         alt="Exact solution u and v of the BHF equation" style="width:100%;">
+    <figcaption>
+      <strong>Figure 2.</strong>
+      The exact solution of the BHF equation (1.2) with initial data $a_0$ given by (2.2),
+      $v_0(x)=a_0^{1/2}(x)-x^2e^{-x^2}H(-x)$, where $H$ is the Heaviside step function.
+      $u_0$ is given by $u_0(x)=\sqrt{a_0(x)-v_0^2(x)}$.
+    </figcaption>
+  </figure>
+
+  <p>
+    It is then an easy exercise to compute the derivative and inverse of $\psi$ exactly:
+  </p>
+
+$$\psi_x(x, t) = \begin{cases}
+  1, \qquad &x \leqslant -1, \\
+  \left(\dfrac{\frac{1}{3}-t}{\frac{1}{3}}\right)^{\!\!1/3},
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\; t &lt; t^\flat(x), \\
+  |x|^{1/2},
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\; t \geqslant t^\flat(x), \\
+  1, \qquad &0 \leqslant x.
+\end{cases}$$
+
+  <p>and</p>
+
+$$\psi_{-1}(x, t) = \begin{cases}
+  x - t, \qquad &x - t \leqslant -1, \\
+  x\!\left(\dfrac{\frac{1}{3}-t}{\frac{1}{3}}\right)^{\!\!-1/3},
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\;
+    t &lt; t^\flat\!\left(x\!\left(\dfrac{\frac{1}{3}-t}{\frac{1}{3}}\right)^{\!\!-1/3}\right), \\
+  -\!\left(\dfrac{3}{2}\!\left(\tfrac{1}{3}+x-t\right)\right)^{\!\!2/3},
+    \qquad &-1\leqslant x &lt; 0 \;\text{and}\;
+    t \geqslant t^\flat\!\left(x\!\left(\dfrac{\frac{1}{3}-t}{\frac{1}{3}}\right)^{\!\!-1/3}\right), \\
+  x, \qquad &0 \leqslant x.
+\end{cases}$$
+
+  <p>The solution $u, v$ is exactly determined by</p>
+
+$$v(y, t) = v_0(\psi_{-1}(y, t))\,\psi_x^{-1}(\psi_{-1}(y, t), t), \qquad u(y, t) = \sqrt{a(y, t) - v^2(y, t)}.\tag{2.4}$$
+
+  <p>
+    Note that $u_0$ is completely determined by an arbitrary choice of $v_0$ satisfying
+    only the condition that $v_0^2(x) \leqslant a_0(x)$.
+  </p>
+
+  <figure>
+    <img src="../../static/images/blog/an-exact-over-compressive-shock-solution-for-the-brio-hunter-equations/exact_chars_2.png"
+         alt="Time evolution of the characteristics η, ψ, and ψ_x" style="width:100%;">
+    <figcaption>
+      <strong>Figure 3.</strong>
+      The evolution in time of the characteristics $\eta$ and $\psi$, and $\psi_x$.
+    </figcaption>
+  </figure>
+
+</d-article>
+
+<d-appendix>
+  <d-footnote-list></d-footnote-list>
+</d-appendix>
+
+</body>
+</html>

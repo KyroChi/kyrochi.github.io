@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Current State of Artificial Neural Networks - Kyle R. Chickering</title>
+    <link rel="stylesheet" href="../../static/css/main.css">
+    <link rel="stylesheet" href="../../static/css/synthwave.css">
+    
+    <script>
+        // Apply theme immediately to prevent flash of unstyled content
+        if (localStorage.getItem('synthwave-theme') === 'on') {
+            document.documentElement.classList.add('synthwave');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a class="site-title" href="../../index.html">Kyle R. Chickering</a>
+            <div class="nav-links">
+                <a href="../../index.html">Home</a>
+                <a href="../../blog/index.html">Blog</a>
+                <button id="theme-toggle" class="theme-toggle">Synthwave</button>
+            </div>
+        </nav>
+        <article>
+    <div class="post-header">
+        <div class="post-meta">March 2016</div>
+        <h1>🧠 Current State of Artificial Neural Networks</h1>
+    </div>
+    <p><strong>Kyle R. Chickering</strong></p>
+<p>University of Utah Department of Computer Science</p>
+<p>March 22, 2016</p>
+<p>[ <strong><a href="../../index.html">Homepage</a></strong> ]</p>
+<hr />
+<p><strong>Abstract</strong>: <em>Artificial neural network (ANN) is an important part of the field of Artificial Intelligence, and the nature of ANNs make them bisect the fields of computer science, mathematics, and biology. The many applications of ANNs make them an important research topic, and as they are more and more commonly implemented in the private sector by companies like Google, Apple, Amazon, Spotify, Netflix, Twitter, Microsoft, Snapchat, Instagram and EBay, research about ANNs continues to yield new advancements in this technology. The applications of ANN, such as in machine learning, data mining, visual image processing (VIP) and natural language processing (NLP) are all relevant topics of study. The research being done has shown that neural networks are superior when it comes to pattern recognition, memory tasks, computational identification, artificial intelligence, web indexing, and many more. As research continues, more and more applications of neural networks are discovered, including implementations that play video games, board games, identify shopping and banking trends, and usage in the field of medicine to predict patient outcomes. This paper explores current research of ANNs in the fields of machine learning, data mining, natural language processing, and medicine.</em></p>
+<p><strong>Keywords</strong>: artificial intelligence, artificial neural network, machine learning, ANN.</p>
+<h1 id="introduction">Introduction</h1>
+<p>Science fiction has long been fascinated by machines and robots that think like humans. <em>2001: A Space Odyssey</em>, the <em>Terminator</em> series, Isaac Asimov’s <em>Robot</em> series, and the popular video game <em>Portal </em>all feature some sort of artificial intelligence. Though the robot revolution won’t be happening any time soon, there has been a lot of beneficial research into artificial intelligence, including research into a type of artificial intelligence called artificial neural network (ANN)s.</p>
+<p>ANNs aim to solve problems through human-like reasoning, rather than through purely mathematical algorithms. (Although ironically making computers reason involves some very complex math) ANNs attempts to represent the biological structure of the human brain in software to solve problems that traditional software finds difficult, but humans may find easy. Pattern recognition is a common application for these neural networks, because a human can automatically recognize, classify, and describe patterns, photos, and physical objects, but traditional software has a hard time doing the same. ANNs aim to reason through problems in a similar manner to the way that humans reason through problems.</p>
+<p>ANNs are important because they offer a way to preform tasks that are easy for humans, but nearly impossible for traditional methods of computation (such as data classification, image recognition, and problem solving). Because most of the problems approached by ANNs don’t have an exact answer, or have an answer that is, at its core quite complex, ANNs have been a large topic of study in the field of Computer Science in recent decades, and their applications become more and more apparent as they are used in advertising, search engine algorithms, and big data mining and classification.</p>
+<p>Recent research into artificial neural networks has focuses in many fields, but the ones that I think are most interesting are their applications in machine learning (playing video games), data mining and analysis, visual image processing, natural language processing, and medicine.</p>
+<h1 id="background">Background</h1>
+<p>ANNs have been an important topic of study since the late 1930s when Nicolas Rashevsky started developing mathematical methods to represent biological functions [5]. His contributions prompted research into representing the brain’s complex neuron networks with computers and in the 1950s mathematicians Marvin Minsky and Dean Edmonds developed the first “neurocomputer” called SNARC [5]. Although never practically employed, SNARC led the way for pattern recognition computing.</p>
+<p>In March of this year (2016), a software branch of Google called Deep Mind built software to play the Chinese board game Go. This game is viewed as being the hardest of any classical game for artificial intelligence to play [1], and professional Go players often report using intuition and feeling, rather than logic, to decide their next moves. Their software, named AlphaGo, won 4 of its 5 matches against world champion Lee Sedol. Programs like DeepBlue (made by IBM to play chess in 1996) utilize advanced searching algorithms in a database to determine their next move, but because of the sheer number of possible board combinations in Go, AlphaGo utilizes a deep neural network to decide its next move instead.</p>
+<p>There are two main types of ANNs, supervised and unsupervised. Supervised networks require a human to provide inputs and their proper outputs to “calibrate” the ANN. Unsupervised learning is entirely dependent on the computer figuring out the correct answers. An example of supervised learning would be teaching a computer how to identify people by looking at their picture, the computer would be given photographs and told who is in the photo so that it could develop a method of identification. An unsupervised program may be told to find trends leading up to peak stock prices so that it can trade relatively safely. Both of these classes of ANN have their own strengths and weaknesses, and the type chosen is usually dependent on the application.</p>
+<h1 id="anns-in-data-mining-and-analysis">ANNs in Data Mining and Analysis</h1>
+<p>Data mining is a huge part of our lives, whether we know it or not. Even if we don’t want them to, companies like <em>Facebook</em>, <em>Amazon</em>, <em>Netflix</em>, and <em>Google</em> are collecting and storing huge amounts of personal data about their users, including search histories, user preferences, and personal information. The process by which useful data is extracted from these data sets is called data mining, and provides useful insights to companies about trends in user habits, popular content and preferences so that the company can provide a better user experience or target advertising to the consumer.</p>
+<p>The most common data mining processes are classification, clustering, regression, and association learning [6]. ANNs can be useful in applications where traditional data mining algorithms may not work as well. For example, a K-nearest neighbor algorithm won’t work well to identify trends in the stock market, but a neural network will be able to gather information from the data set despite the stock market being such a complex data set.</p>
+<p>Humans can easily identify patterns, and given a set of user data a human could realistically arrive at conclusions about that person, or suggest to them new products and services they may enjoy. The problem comes when automating this process to cover the entire user-base of a service like Facebook (1.5 billion as of Q4 2015). Neural networks are able to analyze this data and return relevant information to the users of the service, without compromising user data or having to rely on humans to manually suggest things to the users.</p>
+<h2 id="research-on-anns-in-data-mining">Research on ANNs in Data Mining</h2>
+<p>ANNs are not commonly used for data mining tasks due to their complexity and often un-useable results [6]. However, by capitalizing on their higher accuracy and better data noise acceptance, neural networks are sometimes preferable to other methods of data mining [6].</p>
+<p>ANNs have 3 main advantages over other data mining processes (like K-nearest neighbor, decision trees, and genetic algorithms). They have high accuracy, data noise tolerance, and independence from prior assumptions [6]. What this means is that ANNs are able to approximate complex functions with a higher degree of success, work well even with incomplete or noisy data, and can be continually updated with new data while still retaining their accuracy [6]. These advantages allow them to be used in situations where traditional data mining techniques may not yield useable or informative results.</p>
+<p>Another advantage that neural networks have over other data mining algorithms is their ability to be implemented over systems with parallel processing capabilities. The nature of an ANN allows its “neurons” to “fire” simultaneously which can be used on a system with parallel processing to massively increase performance, especially when working with very large data sets. This parallel processing ability, combined with accuracy and ability to still preform despite having small or incomplete data sets makes them a valuable option when implementing data mining techniques.</p>
+<h1 id="anns-in-natural-language-processing">ANNs in Natural Language Processing</h1>
+<p>Humans are built to understand language. Growing up speaking, reading, and writing makes language automatic and natural for us. Computers don’t have this ability to understand language. They may “understand” programming languages, but at their core, programming languages are just a set of instructions that are eventually translated into a series of ones and zeros.</p>
+<p>Programming languages lack the depth and complexity of human language. Grammar, homophones, implied meaning, slang, and anecdotes are all things that computers don’t quite understand. For example, the phrase “you can lead a horse to water but you can’t make it drink” doesn’t necessarily mean that horses don’t like water, but that is the most likely outcome of a computer interpreting this common phrase.</p>
+<p>Natural language processing (NLP) aims to bridge this gap between language and understanding for computers. NLP software gathers and analyzes spoken and written language and attempts to comprehend the meaning and apply it to a given problem. Apple’s Siri is a good example of NLP software, Siri takes what you tell her and transforms it into a form that the computer can understand and executes the process that the user has requested. Telling Siri to “set timer for five minutes” will make your iPhone set a timer for five minutes.</p>
+<p>ANNs are important in NLP because without them a program would have to rely on some sort of sorting and searching algorithm that iterates through a huge database to get to the meaning of the input speech. For the phrase mentioned above, “You can lead a horse to water but you can’t make it drink”, a database NLP program may find that combination of words in its database and learn that this particular combination is an idiom meaning that you can give someone an opportunity but they might not take it, with a further implication that the person should have taken the opportunity.</p>
+<p>This works, but it’s a slow and clunky process that relies on a continually updated database of words and phrases common to a language. If a computer comes across something that is absent from its database, it will not know how to process the meaning.</p>
+<p>This is why ANNs play such an important role in NLP, when a human comes across a new word or phrase, often they can infer the meaning from context or by the words around it, something a database based NLP program cannot do. By modeling NLP programs to behave like the human brain, computer scientists can teach a program how to actually understand a language, and go beyond accessing a database. Using ANNs is much faster, and rather than simply returning database queries, a NLP program based on an ANN can actually <em>learn </em>a language, and retain comprehension for things it has read. This opens up a whole new area of computation where software can interact effectively with humans to automate their lives (Apple’s Siri and Amazon’s Echo) or summarize complex legal documents for people who may not have expertise in the given field.</p>
+<h2 id="research-in-anns-in-nlp">Research in ANNs in NLP</h2>
+<p>Lots of research is being done looking into effective ANN algorithms for processing human speech. Current research into NLP explores ways to decompose speech using a neural network and extract meaning from the language [9]. Ke and Hagiwara have created a method for understanding English that separates the language into multiple different pieces that can be analyzed by hidden layer neurons to understand the input speech [9]. This technique takes the input language and decomposes it into a sentence layer, phrase layer, and word layer. This allows the software to separately analyze each layer and extract meaning from each layer, rather than attempting to extract meaning from the input as a whole [9].</p>
+<p>Hagiwara has also worked on NLP techniques that combine ANN with language encyclopedias to create software that can not only learn language, but can remember and recall language that it has seen before [3]. This gives the software the ability to create analogical inferences and has been shown to out-preform any other system designed for processing language and drawing conclusions about the input [3].</p>
+<p>Another group or researchers are using ANN in combination with data mining to analyze stock market news and financial reports to to find relations in the literature about the stock market and the stock market itself [8]. Since stock markets are such complex functions, it is hard to mathematically calculate stock trends. Humans have the advantage of being able to understand world events and the implications they may have on the markets, and this research aims to bridge the gap between understanding and application to give their software an advantage in automated trading [8].</p>
+<h1 id="anns-in-medicine">ANNs in Medicine</h1>
+<p>Neural networks are starting to be explored in the field of medicine. Based on inputs from doctors and huge amounts of medical records available to look through, neural networks can classify and diagnose illnesses before the patient even shows symptoms, this is a valuable asset to a hospital or medical practice because it can be very accurate, and doctors don’t have to tediously attempt to find correlations between medical records of patients with and without an illness. A neural network can determine a person’s risk of heart disease by comparing them to their peers and the symptoms and past medical records of a similar patient from a few years ago.</p>
+<p>Because of how complicated the human body is, and the sheer number of possible diagnoses available make it difficult for human doctors to find correlations between vast quantities of data sets. In addition, ANNs provide an opportunity to find correlations that might not have been previously observed in the field of medicine. Using advanced image processing and comparing results between a large volume of patients, ANNs can extrapolate correlations that to a human seem unrelated and insignificant. Such correlations can lead to early diagnoses of diseases like Coronary Heart Disease [2] and in turn, early treatment for patients.</p>
+<h2 id="ann-research-in-medicine">ANN Research in Medicine</h2>
+<p>There is a lot of good research with ANNs in medicine, one common application of neural networks is to analyze medical imagining to identify problematic symptoms in patients. One group of researchers has been applying neural networks to the analysis of SPECT nuclear medical images to predict Coronary Artery Disease in patients [2].</p>
+<p>Researchers Park, Lee, Weiss and Motai are working on software that uses ANNs to predict lung cancer tumor movement so that radiation therapy can be administered in a safer way [7]. Their software identifies tumor movement patterns from both the current patient and similar patients. These techniques greatly increase the effectiveness and safety of radiotherapy in treating cancer [7]. Research like this is beneficial because it can take a process like radiation which has many negative side effects, and by reducing the amount of therapy needed to achieve the same results, dramatically improve patient well being.</p>
+<h1 id="conclusions">Conclusions</h1>
+<p>Future research in ANNs will involve optimizing neural networks for more computer systems and exploring ways to apply neural networks in different fields.</p>
+<p>A lot more research will be done in using ANNs for Visual Image Processing (VIP) and NLP. These two fields represent tasks that are very difficult for computers and an area that needs further research. Not only will these fields be researched for their applications in professional and consumer markets, but they will be researched to expand and explore the limitations of computational intelligence.</p>
+<p>As ANNs get larger and are able to think even more like the human brain, the discussion about ethics related to artificial intelligence will become even more prevalent than it already is. Although it’s a long way off, neural networks do have the potential to gain sentience, and our treatment of sentient computers may become a topic of discussion when that time comes.</p>
+<p>Another ethical issue related to artificial intelligence is the problem that by imitating and optimizing our own biological structure we may inadvertently create computers that are smarter and more capable than the humans that created them. A classic end scenario for this situation is computers deciding that humans are a hindrance to their own performance and using technology to collapse society. This concern is theoretically possible, but practically unlikely and as ANNs and artificial intelligence continue to advance the conversations will become more relevant to the realities of artificial intelligence.</p>
+<p>The contributions made by researchers in the field of artificial intelligence show us that computers are capable of things more complex than mathematics, and can be used to model biological processes in a way that aids humanity. The applications for ANNs are vast, and we continue to find applications where ANNs can optimize performance of a system.</p>
+<h1 id="references">References</h1>
+<ol>
+<li>
+<p>D. Silver, A. Huang, C. Maddison, A. Guez, L. Sifre, G. van den Driessche, J. Schrittwieser, I. Antonoglou, V. Panneershelvam, M. Lanctot, S. Dieleman, D. Grewe, J. Nham, N. Kalchbrenner, I. Sutskever, T. Lillicrap, M. Leach, K. Kavukcuoglu, T. Graepel and D. Hassabis, "Mastering the game of Go with deep neural networks and tree search", <em>Nature</em>, vol. 529, no. 7587, pp. 484-489, 2016.</p>
+</li>
+<li>
+<p>H. Bagher-Ebadian, H. Soltanian-Zadeh, S. Setayeshi and S. Smith, "Neural Network and Fuzzy Clustering Approach for Automatic Diagnosis of Coronary Artery Disease in Nuclear Medicine", <em>IEEE Trans. Nucl. Sci.</em>, vol. 51, no. 1, pp. 184-192, 2004.</p>
+</li>
+<li>
+<p>M. Saito and M. Hagiwara, "Natural language processing neural network for analogical inference", <em>The 2010 International Joint Conference on Neural Networks (IJCNN)</em>, 2010.</p>
+</li>
+<li>
+<p>Q. Ma, "Natural language processing with neural networks", <em>Language Engineering Conference, 2002. Proceedi</em></p>
+</li>
+<li>
+<p>R. Seising and M. Tabacchi, "A very brief history of soft computing: Fuzzy Sets, artificial Neural Networks and Evolutionary Computation", <em>2013 Joint IFSA World Congress and NAFIPS Annual Meeting (IFSA/NAFIPS)</em>, 2013.</p>
+</li>
+<li>
+<p>S. Nirkhi, "Potential use of Artificial Neural Network in Data Mining", <em>2010 The 2nd International Conference on Computer and Automation Engineering (ICCAE)</em>, 2010.</p>
+</li>
+<li>
+<p>S. Park, S. Lee, E. Weiss and Y. Motai, "Intra- and Inter-Fractional Variation Prediction of Lung Tumors Using Fuzzy Deep Learning", <em>IEEE Journal of Translational Engineering in Health and Medicine</em>, vol. 4, pp. 1-12, 2016.</p>
+</li>
+<li>
+<p>Xun Liang and Rong-Chang Chen, "Mining Stock News in Cyberworid Based on Natural Language Processing and Neural Networks", <em>2005 International Conference on Neural Networks and Brain</em>.</p>
+</li>
+<li>
+<p>Yuanzhi Ke and M. Hagiwara, "A natural language processing neural network comprehending English", <em>2015 International Joint Conference on Neural Networks (IJCNN)</em>, 2015.</p>
+</li>
+</ol>
+</article>
+
+        <footer>
+            &copy; Kyle R. Chickering
+        </footer>
+    </div>
+    <script src="../../static/js/theme-toggle.js"></script>
+    
+</body>
+</html>

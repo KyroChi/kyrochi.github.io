@@ -1,0 +1,183 @@
+/* Synthwave theme - early apply on html to prevent flash */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap');
+
+html.synthwave {
+    background: #0a0a2e;
+}
+
+body.synthwave {
+    font-family: "Orbitron", -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: 0.02em;
+    --bg: #0a0a2e;
+    --text: #e0d4ff;
+    --text-secondary: #a78bfa;
+    --link: #f472b6;
+    --border: #2d1b69;
+    --code-bg: #1a1a4e;
+    --accent: #f472b6;
+    --nav-bg: #0d0d35;
+    --blockquote-border: #f472b6;
+    --callout-bg: #1a1a4e;
+
+    background:
+        linear-gradient(180deg, #0a0a2e 0%, #1a0a3e 100%);
+    background-attachment: fixed;
+}
+
+/* Grid background */
+body.synthwave::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        linear-gradient(rgba(244, 114, 182, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(244, 114, 182, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+body.synthwave .container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Neon glow headings */
+body.synthwave h1,
+body.synthwave h2,
+body.synthwave h3 {
+    color: #f0abfc;
+    text-shadow: 0 0 10px rgba(240, 171, 252, 0.3);
+}
+
+body.synthwave .page-title-heading,
+body.synthwave .post-header h1 {
+    color: #f472b6;
+    text-shadow:
+        0 0 10px rgba(244, 114, 182, 0.5),
+        0 0 30px rgba(244, 114, 182, 0.2);
+}
+
+/* Nav */
+body.synthwave nav {
+    border-bottom-color: #2d1b69;
+}
+
+body.synthwave nav .site-title {
+    color: #f472b6;
+    text-shadow: 0 0 10px rgba(244, 114, 182, 0.4);
+}
+
+body.synthwave nav .nav-links a {
+    color: #a78bfa;
+}
+
+body.synthwave nav .nav-links a:hover {
+    color: #f0abfc;
+    text-shadow: 0 0 8px rgba(240, 171, 252, 0.4);
+}
+
+/* Links */
+body.synthwave a {
+    color: #f472b6;
+    text-decoration-color: rgba(244, 114, 182, 0.4);
+}
+
+body.synthwave a:hover {
+    text-shadow: 0 0 8px rgba(244, 114, 182, 0.4);
+}
+
+/* Code */
+body.synthwave pre {
+    background: #12123e;
+    border: 1px solid #2d1b69;
+    box-shadow: 0 0 15px rgba(45, 27, 105, 0.3);
+}
+
+body.synthwave code {
+    background: #1a1a4e;
+    color: #67e8f9;
+}
+
+body.synthwave pre code {
+    color: #e0d4ff;
+}
+
+/* Theme toggle */
+body.synthwave .theme-toggle {
+    border-color: #f472b6;
+    color: #f472b6;
+    text-shadow: 0 0 8px rgba(244, 114, 182, 0.4);
+}
+
+body.synthwave .theme-toggle:hover {
+    background: rgba(244, 114, 182, 0.1);
+    box-shadow: 0 0 15px rgba(244, 114, 182, 0.2);
+}
+
+/* Blog list */
+body.synthwave .blog-list li {
+    border-bottom-color: #2d1b69;
+}
+
+body.synthwave .blog-list .post-title {
+    color: #f0abfc;
+}
+
+/* Images */
+body.synthwave img {
+    border: 1px solid #2d1b69;
+    box-shadow: 0 0 20px rgba(45, 27, 105, 0.4);
+}
+
+/* HR */
+body.synthwave hr {
+    border-top-color: #2d1b69;
+    box-shadow: 0 0 8px rgba(244, 114, 182, 0.1);
+}
+
+/* Blockquote */
+body.synthwave blockquote {
+    border-left-color: #f472b6;
+    color: #a78bfa;
+}
+
+/* Table */
+body.synthwave th {
+    background: #1a1a4e;
+    color: #f0abfc;
+}
+
+body.synthwave th,
+body.synthwave td {
+    border-color: #2d1b69;
+}
+
+/* Footer */
+body.synthwave footer {
+    border-top-color: #2d1b69;
+    color: #a78bfa;
+}
+
+/* Callout */
+body.synthwave .callout {
+    background: #12123e;
+    border: 1px solid #2d1b69;
+}
+
+/* Scrollbar */
+body.synthwave::-webkit-scrollbar {
+    width: 8px;
+}
+
+body.synthwave::-webkit-scrollbar-track {
+    background: #0a0a2e;
+}
+
+body.synthwave::-webkit-scrollbar-thumb {
+    background: #2d1b69;
+    border-radius: 4px;
+}

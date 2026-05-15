@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Projects - Kyle R. Chickering</title>
+    <link rel="stylesheet" href="../static/css/main.css">
+    <link rel="stylesheet" href="../static/css/synthwave.css">
+    
+    <script>
+        // Apply theme immediately to prevent flash of unstyled content
+        if (localStorage.getItem('synthwave-theme') === 'on') {
+            document.documentElement.classList.add('synthwave');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a class="site-title" href="../index.html">Kyle R. Chickering</a>
+            <div class="nav-links">
+                <a href="../index.html">Home</a>
+                <a href="../blog/index.html">Blog</a>
+                <button id="theme-toggle" class="theme-toggle">Synthwave</button>
+            </div>
+        </nav>
+        <p><strong><a href="../index.html">Homepage</a></strong> | <strong><a href="../resume/index.html">Resume</a></strong> | <strong><a href="../blog/index.html">Blog</a></strong> | <strong><a href="../publications/index.html">Publications</a></strong></p>
+
+        <footer>
+            &copy; Kyle R. Chickering
+        </footer>
+    </div>
+    <script src="../static/js/theme-toggle.js"></script>
+    
+</body>
+</html>
