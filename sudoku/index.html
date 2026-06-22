@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sudoku - Kyle R. Chickering</title>
+    <link rel="stylesheet" href="../static/css/main.css">
+    <link rel="stylesheet" href="../static/css/synthwave.css">
+    
+    <script>
+        // Apply theme immediately to prevent flash of unstyled content
+        if (localStorage.getItem('synthwave-theme') === 'on') {
+            document.documentElement.classList.add('synthwave');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <a class="site-title" href="../index.html">Kyle R. Chickering</a>
+            <div class="nav-links">
+                <a href="../index.html">Home</a>
+                <a href="../blog/index.html">Blog</a>
+                <button id="theme-toggle" class="theme-toggle">Synthwave</button>
+            </div>
+        </nav>
+        <style>
+/* ── Sudoku layout ─────────────────────────────── */
+.sdku-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 3rem;
+}
+.sdku-wrap h1 { margin-top: 0.5rem; margin-bottom: 0; }
+
+/* Controls */
+.sdku-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 500px;
+}
+.sdku-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+.sdku-mode-row label { color: var(--text-secondary); }
+.sdku-seg {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.sdku-seg button {
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    padding: 0.28rem 0.6rem;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 0.82rem;
+    font-family: inherit;
+    transition: background 0.1s;
+}
+.sdku-seg button:last-child { border-right: none; }
+.sdku-seg button.active {
+    background: var(--text);
+    color: var(--bg);
+}
+.sdku-btn-row {
+    display: flex;
+    gap: 0.5rem;
+}
+.sdku-btn-row button {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: background 0.1s;
+}
+.sdku-btn-row button:hover { background: var(--code-bg); }
+.sdku-btn-row button.notes-on {
+    border-color: var(--text);
+    background: var(--text);
+    color: var(--bg);
+}
+.sdku-msg {
+    font-size: 0.88rem;
+    min-height: 1.3em;
+    font-weight: 500;
+}
+.sdku-msg.win  { color: #27ae60; }
+.sdku-msg.ok   { color: #2980b9; }
+.sdku-msg.err  { color: #e74c3c; }
+
+/* Grid */
+.sdku-grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    width: min(504px, calc(100vw - 2rem));
+    aspect-ratio: 1;
+    border: 3px solid var(--text);
+    border-radius: 2px;
+    box-sizing: border-box;
+}
+.sdku-cell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    user-select: none;
+    overflow: hidden;
+    transition: background 0.07s;
+}
+.sdku-cell:nth-child(9n)   { border-right: none; }
+.sdku-cell:nth-child(n+73) { border-bottom: none; }
+.sdku-cell.box-right  { border-right:  2px solid var(--accent); }
+.sdku-cell.box-bottom { border-bottom: 2px solid var(--accent); }
+
+/* Number symbol */
+.sdku-digit {
+    font-size: clamp(0.9rem, 3.8vw, 1.55rem);
+    font-weight: 600;
+    line-height: 1;
+    pointer-events: none;
+}
+
+/* Shape SVG */
+.sdku-shape {
+    width: 58%;
+    height: 58%;
+    display: block;
+    pointer-events: none;
+}
+.sdku-shape.sm {
+    width: 78%;
+    height: 78%;
+}
+
+/* Notes sub-grid */
+.sdku-notes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: 92%;
+    height: 92%;
+    pointer-events: none;
+}
+.sdku-note-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(0.32rem, 1.3vw, 0.5rem);
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* Numpad */
+.sdku-pad {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+    width: min(504px, calc(100vw - 2rem));
+}
+.sdku-pad-btn {
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    padding: 0;
+    transition: border-color 0.12s, transform 0.1s;
+    font-family: inherit;
+}
+.sdku-pad-btn:hover {
+    border-color: var(--text);
+    transform: scale(1.06);
+}
+.sdku-pad-btn svg { width: 52%; height: 52%; display: block; }
+.sdku-pad-btn .sdku-digit { font-size: clamp(1rem, 4vw, 1.6rem); }
+.sdku-erase {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+}
+
+/* Synthwave overrides */
+body.synthwave .sdku-seg { border-color: #2d1b69; }
+body.synthwave .sdku-seg button { border-right-color: #2d1b69; color: var(--text); }
+body.synthwave .sdku-seg button.active { background: #f472b6; color: #0a0a2e; border-color: #f472b6; }
+body.synthwave .sdku-btn-row button { border-color: #2d1b69; color: var(--text); }
+body.synthwave .sdku-btn-row button:hover { background: #1a1a4e; }
+body.synthwave .sdku-btn-row button.notes-on { border-color: #f472b6; background: #f472b6; color: #0a0a2e; }
+body.synthwave .sdku-cell { border-right-color: #2d1b69; border-bottom-color: #2d1b69; }
+body.synthwave .sdku-cell.box-right  { border-right-color:  #a78bfa; }
+body.synthwave .sdku-cell.box-bottom { border-bottom-color: #a78bfa; }
+body.synthwave .sdku-pad-btn { border-color: #2d1b69; background: #12123e; }
+body.synthwave .sdku-pad-btn:hover { border-color: #f472b6; box-shadow: 0 0 10px rgba(244,114,182,0.2); }
+</style>
+
+<div class="sdku-wrap">
+  <h1>🧩 Sudoku</h1>
+
+  <div class="sdku-controls">
+    <div class="sdku-mode-row">
+      <label>Symbol</label>
+      <div class="sdku-seg" id="sym-seg">
+        <button data-val="none">None</button>
+        <button data-val="number">Number</button>
+        <button data-val="shape">Shape</button>
+      </div>
+      <label>Color</label>
+      <div class="sdku-seg" id="col-seg">
+        <button data-val="color">Color</button>
+        <button data-val="bw">B&amp;W</button>
+      </div>
+    </div>
+    <div class="sdku-btn-row">
+      <button id="btn-new">New Puzzle</button>
+      <button id="btn-notes">Notes: OFF</button>
+      <button id="btn-check">Check</button>
+    </div>
+    <div id="sdku-msg" class="sdku-msg"></div>
+  </div>
+
+  <div id="sdku-grid" class="sdku-grid"></div>
+  <div id="sdku-pad"  class="sdku-pad"></div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+// ── Palette ────────────────────────────────────────────────────
+const COLORS = [
+    '#e74c3c','#e67e22','#f1c40f',
+    '#27ae60','#16a085','#2980b9',
+    '#8e44ad','#c0392b','#795548'
+];
+// Distinct greyscale fills for B&W background (None mode)
+const BG_GREYS = [
+    '#d5d5d5','#bababa','#9f9f9f',
+    '#848484','#696969','#4e4e4e',
+    '#383838','#232323','#0f0f0f'
+];
+// Dark-to-mid for symbol fills (Number/Shape mode, B&W)
+const SYM_GREYS = [
+    '#111111','#2a2a2a','#3d3d3d',
+    '#505050','#636363','#767676',
+    '#898989','#9c9c9c','#afafaf'
+];
+
+// ── State ──────────────────────────────────────────────────────
+let board    = new Array(81).fill(0);
+let solution = new Array(81).fill(0);
+let given    = new Array(81).fill(false);
+let notes    = Array.from({length: 81}, () => new Set());
+let selected = -1;
+let notesMode   = false;
+let symbolMode  = 'shape';
+let colorMode   = 'color';
+
+// ── Color helper ───────────────────────────────────────────────
+function getColor(val) {
+    const i = val - 1;
+    if (colorMode === 'color') return COLORS[i];
+    return (symbolMode === 'none') ? BG_GREYS[i] : SYM_GREYS[i];
+}
+
+// ── SVG shape helpers ──────────────────────────────────────────
+function nGon(n, cx, cy, r, startDeg) {
+    return Array.from({length: n}, (_, i) => {
+        const a = (startDeg + 360 * i / n) * Math.PI / 180;
+        return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+    }).join(' ');
+}
+
+function starPts(n, cx, cy, outerR, innerR, startDeg) {
+    return Array.from({length: n * 2}, (_, i) => {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const a = (startDeg + 180 * i / n) * Math.PI / 180;
+        return `${(cx + r * Math.cos(a)).toFixed(2)},${(cy + r * Math.sin(a)).toFixed(2)}`;
+    }).join(' ');
+}
+
+function makeShape(val, fill, small) {
+    const cls = small ? ' class="sdku-shape sm"' : ' class="sdku-shape"';
+    const cx = 50, cy = 50, r = 38;
+    let inner;
+    switch (val) {
+        case 1: inner = `<circle cx="50" cy="50" r="${r}"/>`; break;
+        case 2: inner = `<polygon points="${nGon(3, cx, cy, r, -90)}"/>`; break;
+        case 3: {
+            const h = (r * Math.SQRT2 * 0.96).toFixed(2);
+            const o = (50 - h / 2).toFixed(2);
+            inner = `<rect x="${o}" y="${o}" width="${h}" height="${h}"/>`;
+            break;
+        }
+        case 4: inner = `<polygon points="50,12 88,50 50,88 12,50"/>`; break;
+        case 5: inner = `<polygon points="${nGon(5, cx, cy, r, -90)}"/>`; break;
+        case 6: inner = `<polygon points="${nGon(6, cx, cy, r, -90)}"/>`; break;
+        case 7: inner = `<polygon points="${starPts(5, cx, cy, r, 16, -90)}"/>`; break;
+        case 8: inner = `<polygon points="${starPts(4, cx, cy, r, 18, -90)}"/>`; break;
+        case 9: inner = `<polygon points="${nGon(8, cx, cy, r, -67.5)}"/>`; break;
+        default: inner = '';
+    }
+    return `<svg${cls} viewBox="0 0 100 100" fill="${fill}">${inner}</svg>`;
+}
+
+// ── Cell content ───────────────────────────────────────────────
+function cellContent(idx) {
+    const val   = board[idx];
+    const nset  = notes[idx];
+
+    if (val > 0) {
+        const col = getColor(val);
+        if (symbolMode === 'shape')  return makeShape(val, col, false);
+        if (symbolMode === 'number') return `<span class="sdku-digit" style="color:${col}">${val}</span>`;
+        return ''; // none: background handles it
+    }
+
+    if (nset.size > 0) {
+        let h = '<div class="sdku-notes">';
+        for (let n = 1; n <= 9; n++) {
+            if (nset.has(n)) {
+                const col = getColor(n);
+                if (symbolMode === 'shape') {
+                    h += `<div class="sdku-note-slot">${makeShape(n, col, true)}</div>`;
+                } else if (symbolMode === 'number') {
+                    h += `<div class="sdku-note-slot" style="color:${col}">${n}</div>`;
+                } else {
+                    h += `<div class="sdku-note-slot"><span style="display:block;width:55%;aspect-ratio:1;border-radius:50%;background:${col}"></span></div>`;
+                }
+            } else {
+                h += '<div class="sdku-note-slot"></div>';
+            }
+        }
+        return h + '</div>';
+    }
+
+    return '';
+}
+
+// ── Background for a cell ──────────────────────────────────────
+function cellBg(idx, isSel, isPeer, isMatch) {
+    const val = board[idx];
+    if (isSel)   return 'rgba(100,149,237,0.42)';
+    if (symbolMode === 'none' && val > 0) return getColor(val);
+    if (isMatch) return 'rgba(100,149,237,0.22)';
+    if (isPeer)  return 'rgba(100,149,237,0.09)';
+    if (given[idx]) return 'var(--code-bg)';
+    return '';
+}
+
+// ── Full re-render ─────────────────────────────────────────────
+function render() {
+    const cells = document.querySelectorAll('.sdku-cell');
+    const selRow = selected >= 0 ? Math.floor(selected / 9) : -1;
+    const selCol = selected >= 0 ? selected % 9 : -1;
+    const selBox = selRow >= 0 ? Math.floor(selRow / 3) * 3 + Math.floor(selCol / 3) : -1;
+    const selVal = selected >= 0 ? board[selected] : 0;
+
+    cells.forEach((cell, idx) => {
+        const row = Math.floor(idx / 9), col = idx % 9;
+        const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+        const isSel   = idx === selected;
+        const isPeer  = !isSel && selRow >= 0 && (row === selRow || col === selCol || box === selBox);
+        const isMatch = !isSel && selVal > 0 && board[idx] === selVal;
+
+        cell.innerHTML = cellContent(idx);
+        cell.style.background = cellBg(idx, isSel, isPeer, isMatch);
+    });
+
+    renderPad();
+}
+
+// ── Numpad ─────────────────────────────────────────────────────
+function renderPad() {
+    const pad = document.getElementById('sdku-pad');
+    pad.innerHTML = '';
+
+    for (let n = 1; n <= 9; n++) {
+        const btn = document.createElement('button');
+        btn.className = 'sdku-pad-btn';
+        const col = getColor(n);
+
+        if (symbolMode === 'shape') {
+            btn.innerHTML = makeShape(n, col, false);
+        } else if (symbolMode === 'number') {
+            btn.innerHTML = `<span class="sdku-digit" style="color:${col}">${n}</span>`;
+        } else {
+            // None mode: colored square chip with tiny number label
+            btn.style.background = col;
+            const lbl = (colorMode === 'bw' && n >= 6) ? '#fff' : 'rgba(0,0,0,0.45)';
+            btn.innerHTML = `<span style="font-size:0.65em;font-weight:700;color:${lbl}">${n}</span>`;
+        }
+
+        btn.addEventListener('click', () => input(n));
+        pad.appendChild(btn);
+    }
+
+    const erase = document.createElement('button');
+    erase.className = 'sdku-pad-btn sdku-erase';
+    erase.textContent = '✕';
+    erase.addEventListener('click', () => input(0));
+    pad.appendChild(erase);
+}
+
+// ── Input ──────────────────────────────────────────────────────
+function input(n) {
+    if (selected < 0 || given[selected]) return;
+    if (notesMode && n > 0) {
+        const ns = notes[selected];
+        if (ns.has(n)) ns.delete(n); else ns.add(n);
+    } else {
+        board[selected] = n;
+        notes[selected].clear();
+    }
+    render();
+    if (n > 0 && !notesMode) checkAutoWin();
+}
+
+function checkAutoWin() {
+    if (board.every((v, i) => v === solution[i])) {
+        showMsg('🎉 Puzzle solved!', 'win');
+    }
+}
+
+// ── Selection ──────────────────────────────────────────────────
+function selectCell(idx) {
+    selected = (selected === idx) ? -1 : idx;
+    render();
+}
+
+// ── Build grid DOM ─────────────────────────────────────────────
+function buildGrid() {
+    const grid = document.getElementById('sdku-grid');
+    grid.innerHTML = '';
+    for (let i = 0; i < 81; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'sdku-cell';
+        const row = Math.floor(i / 9), col = i % 9;
+        if (col === 2 || col === 5) cell.classList.add('box-right');
+        if (row === 2 || row === 5) cell.classList.add('box-bottom');
+        cell.dataset.idx = i;
+        cell.addEventListener('click', () => selectCell(i));
+        grid.appendChild(cell);
+    }
+}
+
+// ── Puzzle generation ──────────────────────────────────────────
+function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
+
+function isValid(bd, idx, num) {
+    const row = Math.floor(idx / 9), col = idx % 9;
+    for (let c = 0; c < 9; c++) if (bd[row * 9 + c] === num) return false;
+    for (let r = 0; r < 9; r++) if (bd[r * 9 + col] === num) return false;
+    const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+    for (let r = br; r < br + 3; r++)
+        for (let c = bc; c < bc + 3; c++)
+            if (bd[r * 9 + c] === num) return false;
+    return true;
+}
+
+function solve(bd, randomize, limit, count) {
+    const idx = bd.indexOf(0);
+    if (idx < 0) { count.n++; return count.n >= limit; }
+    const nums = [1,2,3,4,5,6,7,8,9];
+    if (randomize) shuffle(nums);
+    for (const n of nums) {
+        if (isValid(bd, idx, n)) {
+            bd[idx] = n;
+            if (solve(bd, randomize, limit, count)) return true;
+            bd[idx] = 0;
+        }
+    }
+    return false;
+}
+
+function uniqueSolution(bd) {
+    const t = [...bd], c = {n: 0};
+    solve(t, false, 2, c);
+    return c.n === 1;
+}
+
+function newPuzzle() {
+    // Generate complete solution
+    solution = new Array(81).fill(0);
+    solve(solution, true, 1, {n: 0});
+
+    // Remove up to 41 cells while keeping unique solution (easy ~40 givens)
+    board = [...solution];
+    given = new Array(81).fill(true);
+    const order = shuffle([...Array(81).keys()]);
+    let removed = 0;
+    for (const idx of order) {
+        if (removed >= 41) break;
+        const saved = board[idx];
+        board[idx] = 0;
+        if (uniqueSolution(board)) {
+            given[idx] = false;
+            removed++;
+        } else {
+            board[idx] = saved;
+        }
+    }
+
+    notes    = Array.from({length: 81}, () => new Set());
+    selected = -1;
+    notesMode = false;
+    document.getElementById('btn-notes').textContent = 'Notes: OFF';
+    document.getElementById('btn-notes').classList.remove('notes-on');
+    showMsg('', '');
+    buildGrid();
+    render();
+}
+
+// ── Message ────────────────────────────────────────────────────
+function showMsg(text, type) {
+    const el = document.getElementById('sdku-msg');
+    el.textContent = text;
+    el.className = 'sdku-msg' + (type ? ' ' + type : '');
+}
+
+// ── Check button ───────────────────────────────────────────────
+function checkPuzzle() {
+    let errors = 0;
+    for (let i = 0; i < 81; i++)
+        if (board[i] > 0 && board[i] !== solution[i]) errors++;
+    const filled = board.filter(v => v > 0).length;
+    if (errors === 0) {
+        if (filled === 81) showMsg('🎉 Puzzle solved!', 'win');
+        else showMsg('✓ No errors so far', 'ok');
+    } else {
+        showMsg(`${errors} error${errors > 1 ? 's' : ''} found`, 'err');
+    }
+}
+
+// ── Segmented controls ─────────────────────────────────────────
+function initSeg(id, onChange) {
+    const seg = document.getElementById(id);
+    seg.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            seg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            onChange(btn.dataset.val);
+        });
+    });
+}
+
+function setActiveBtn(segId, val) {
+    const seg = document.getElementById(segId);
+    seg.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b.dataset.val === val);
+    });
+}
+
+// ── Keyboard ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') return;
+    const n = parseInt(e.key);
+    if (n >= 1 && n <= 9) { input(n); return; }
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') { input(0); return; }
+    if (e.key === 'n' || e.key === 'N') { toggleNotes(); return; }
+    const dirs = {ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1};
+    if (dirs[e.key] !== undefined) {
+        e.preventDefault();
+        if (selected < 0) { selectCell(0); return; }
+        const row = Math.floor(selected / 9), col = selected % 9;
+        if (e.key === 'ArrowLeft'  && col === 0) return;
+        if (e.key === 'ArrowRight' && col === 8) return;
+        if (e.key === 'ArrowUp'    && row === 0) return;
+        if (e.key === 'ArrowDown'  && row === 8) return;
+        selectCell(selected + dirs[e.key]);
+    }
+});
+
+function toggleNotes() {
+    notesMode = !notesMode;
+    const btn = document.getElementById('btn-notes');
+    btn.textContent = notesMode ? 'Notes: ON' : 'Notes: OFF';
+    btn.classList.toggle('notes-on', notesMode);
+}
+
+// ── Wire up buttons ────────────────────────────────────────────
+document.getElementById('btn-new').addEventListener('click', newPuzzle);
+document.getElementById('btn-notes').addEventListener('click', toggleNotes);
+document.getElementById('btn-check').addEventListener('click', checkPuzzle);
+
+initSeg('sym-seg', val => { symbolMode = val; render(); });
+initSeg('col-seg', val => { colorMode  = val; render(); });
+
+// ── Init ───────────────────────────────────────────────────────
+setActiveBtn('sym-seg', symbolMode);
+setActiveBtn('col-seg', colorMode);
+buildGrid();
+newPuzzle();
+
+})();
+</script>
+        <footer>
+            &copy; Kyle R. Chickering
+        </footer>
+    </div>
+    <script src="../static/js/theme-toggle.js"></script>
+    
+</body>
+</html>
